@@ -31,7 +31,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(codec_msgs REQUIRED)
+find_package(img_msgs REQUIRED)
 
 include_directories(include
 ${PROJECT_SOURCE_DIR}
@@ -65,14 +65,14 @@ ament_target_dependencies(
   hobot_codec_republish
   rclcpp
   sensor_msgs
-  codec_msgs
+  img_msgs
   hbm_img_msgs
 )
 else()
 ament_target_dependencies(
   hobot_codec_republish
   rclcpp
-  codec_msgs
+  img_msgs
   sensor_msgs
 )
 endif()

@@ -16,6 +16,26 @@
 #include "rclcpp/rclcpp.hpp"
 #include "include/video_utils.hpp"
 
+extern "C" int ROS_printf(int nLevel, char *fmt, ...)
+{
+  char buf[512] = { 0 };
+  va_list args;
+  va_start(args, fmt);
+  vsprintf(buf, fmt, args);
+  switch (nLevel) {
+    case 0:
+      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "%s", buf);
+    break;
+    case 1:
+      RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "%s", buf);
+    break;
+    default:
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "%s", buf);
+    break;
+  }
+
+  va_end(args);
+}
 // 返回ms
 int32_t tool_calc_time_laps(const struct timespec &time_start, const struct timespec &time_end)
 {
@@ -32,6 +52,7 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
 
 void TestSave(char *pFilePath, char *imgData, int nDlen)
 {
+  static int s_nSave = 0;
   FILE *yuvFd = fopen(pFilePath, "w+");
   if (yuvFd) {
     fwrite(imgData, 1, nDlen, yuvFd);
@@ -87,11 +108,11 @@ void HobotCodec::get_params()
     } else if (parameter.get_name() == "in_format") {
       in_format_ = parameter.value_to_string();
       RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
-        "image_height_ value: %s", parameter.value_to_string().c_str());
+        "in_format value: %s", parameter.value_to_string().c_str());
     } else if (parameter.get_name() == "out_format") {
       out_format_ = parameter.value_to_string();
       RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
-        "image_height_ value: %s", parameter.value_to_string().c_str());
+        "out_format value: %s", parameter.value_to_string().c_str());
     } else if (parameter.get_name() == "channel") {
       mChannel_ = parameter.as_int();
       RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
@@ -102,15 +123,22 @@ void HobotCodec::get_params()
     }
   }
 }
+void DelRecvImg(void *pItem)
+{
+  TRecvImg* pImg = reinterpret_cast<TRecvImg*>(pItem);
+  if (pImg) {
+    if (pImg->mPImgData)
+      delete []pImg->mPImgData;
+  }
+}
 HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
   std::string node_name)
     : Node(node_name, node_options),
-#ifdef H26X_CODEC
     img_pub_(new sensor_msgs::msg::Image()),
-    frameh26x_sub_(new codec_msgs::msg::H26XFrame) {
-#else
-    img_pub_(new sensor_msgs::msg::Image()) {
+#ifdef THRD_CODEC_PUT
+    m_arrRecvImg(DelRecvImg),
 #endif
+    frameh26x_sub_(new img_msgs::msg::H26XFrame) {
   stop_ = false;
   this->declare_parameter("sub_topic", "/image_raw");
   this->declare_parameter("pub_topic", "/image_raw/compressed");
@@ -134,6 +162,11 @@ HobotCodec::~HobotCodec()
   if (m_spThrdPub) {
     m_spThrdPub->join();
   }
+#ifdef THRD_CODEC_PUT
+  if (m_spThrdPut) {
+    m_spThrdPut->join();
+  }
+#endif
   if (mPtrInNv12)
     delete[] mPtrInNv12;
   if (mPtrOutRGB2)
@@ -164,11 +197,9 @@ int HobotCodec::init()
       "Create subscription with topic_name: %s", in_sub_topic_.c_str());
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
-#ifdef H26X_CODEC
-      ros_subh26xscription_ = this->create_subscription<codec_msgs::msg::H26XFrame>(
+      ros_subscrip_h26x_ = this->create_subscription<img_msgs::msg::H26XFrame>(
             in_sub_topic_, 10,
             std::bind(&HobotCodec::in_ros_h26x_topic_cb, this, std::placeholders::_1));
-#endif
     } else {
       if (in_sub_topic_.compare(topic_name_compressed_) != 0) {
         ros_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
@@ -184,21 +215,30 @@ int HobotCodec::init()
     }
   } else {
 #ifdef SHARED_MEM_MSG
-    hbmem_subscription_ =
-        this->create_subscription_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
-            in_sub_topic_, 10,
-            std::bind(&HobotCodec::in_hbmem_topic_cb, this,
-                      std::placeholders::_1));
+    if ((std::string::npos != in_format_.find("h264")) ||
+      (std::string::npos != in_format_.find("h265"))) {
+      hbmemH26x_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
+        in_sub_topic_, 10,
+        std::bind(&HobotCodec::in_hbmemh264_topic_cb, this, std::placeholders::_1));
+    } else {
+      hbmem_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
+        in_sub_topic_, 10,
+        std::bind(&HobotCodec::in_hbmem_topic_cb, this, std::placeholders::_1));
+    }
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
-      "Create hbmem_subscription with topic_name: %s, sub = %p", in_sub_topic_.c_str(), hbmem_subscription_);
+      "Create hbmem_subscription line=%d topic_name: %s, sub = %p",
+      __LINE__, in_sub_topic_.c_str(), hbmem_subscription_);
 #endif
   }
   // step1: create publish
   const int period_ms = 1000.0 / framerate_;
 
-#ifdef USE_THREAD
+// #ifdef USE_THREAD
   m_spThrdPub = std::make_shared<std::thread>(std::bind(&HobotCodec::exec_loopPub, this));
-#else
+#ifdef THRD_CODEC_PUT
+  m_spThrdPut = std::make_shared<std::thread>(std::bind(&HobotCodec::exec_loopPut, this));
+#endif
+/*#else
   if (out_mode_.compare("shared_mem") != 0) {
     ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), 10);
 
@@ -208,24 +248,72 @@ int HobotCodec::init()
       std::bind(&HobotCodec::timer_ros_pub, this));
   } else {
 #ifdef SHARED_MEM_MSG
-    publisher_hbmem_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
+    hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
         out_pub_topic_.c_str(), 10);
     timer_pub_ = this->create_wall_timer(std::chrono::milliseconds(static_cast<int64_t>(period_ms)),
       std::bind(&HobotCodec::timer_hbmem_pub, this));
 #endif
   }
+#endif*/
+}
+
+#ifdef THRD_CODEC_PUT
+void HobotCodec::exec_loopPut() {
+  // 获取sub 到的数据，FIFO ，put 到 codec 里面
+#ifdef THRD_CODEC_PUT
+  while (!stop_) {
+    TRecvImg* pData = m_arrRecvImg.dequeue();
+    if (pData && pData->mDataLen > 0) {
+      if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(pData->mWidth, pData->mHeight)) {
+        struct timespec time_now = {0, 0}, time_end = {0, 0};
+        clock_gettime(CLOCK_REALTIME, &time_now);
+        uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+        if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
+          int nYuvLen = pData->mWidth * pData->mHeight * 3 / 2;
+          if (nullptr == mPtrInNv12)
+            mPtrInNv12 = new uint8_t[nYuvLen];
+          if (0 == in_format_.compare("bgr8") && mPtrInNv12) {
+            video_utils::BGR24_to_NV12(pData->mPImgData, mPtrInNv12, pData->mWidth, pData->mHeight);
+          } else {
+            video_utils::RGB24_to_NV12(pData->mPImgData, mPtrInNv12, pData->mWidth, pData->mHeight);
+          }
+          m_pHwCodec->PutData(mPtrInNv12, nYuvLen, pData->time_stamp);
+        } else {
+          m_pHwCodec->PutData(pData->mPImgData, pData->mDataLen, pData->time_stamp);
+        }
+        clock_gettime(CLOCK_REALTIME, &time_end);
+        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,w:h=%d:%d,tmlaps %d ms,dLen=%d,laps %d.\n",
+         __func__, pData->encoding, pData->mWidth, pData->mHeight,
+         tool_calc_time_laps(pData->time_stamp, time_now), pData->mDataLen,
+          (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
+      }
+    } else {
+      usleep(10*1000);
+    }
+  }
 #endif
 }
+#endif
+
 void HobotCodec::exec_loopPub() {
   const int period_ms = 1000.0 / framerate_;
   bool bHobot = false;
   if (out_mode_.compare("shared_mem") != 0) {
-    ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), 10);
+    if (0 == out_format_.compare("h264") ||
+      0 == out_format_.compare("h265") ) {
+      ros_h26ximage_publisher_ = this->create_publisher<img_msgs::msg::H26XFrame>(out_pub_topic_.c_str(), 10);
+    } else {
+      ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), 10);
+    }
   } else {
     bHobot = true;
 #ifdef SHARED_MEM_MSG
-    publisher_hbmem_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
-        out_pub_topic_.c_str(), 10);
+    if (0 == out_format_.compare("h264") ||
+      0 == out_format_.compare("h265") ) {
+      h264hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(out_pub_topic_.c_str(), 10);
+    } else {
+      hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(out_pub_topic_.c_str(), 10);
+    }
 #endif
   }
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[ros]->pub %s, topic=%s, period=%d.\n",
@@ -240,8 +328,120 @@ void HobotCodec::exec_loopPub() {
     usleep(period_ms*1000);
   }
 }
-// static int s_nSave = 0;
+
+// 要进行当前接收图像宽高进行判断，如果变了，就不要执行了 wuwlNG
+void DeepInitItem(void *pItem, void *pSrcItem)
+{
+  if (pItem && pSrcItem) {
+    TRecvImg *pDst = reinterpret_cast<TRecvImg*>(pItem);
+    TRecvImg *pSrc = reinterpret_cast<TRecvImg*>(pSrcItem);
+    unsigned char *pRealData = nullptr;
+    if (NULL == pDst->mPImgData) {
+      // jpg/h264/h265 一般不会超过 256K
+      if (IsType(pSrc->encoding, enc_types, 3))
+        pDst->mPImgData = new unsigned char[256000];
+      else
+        pDst->mPImgData = new unsigned char[pSrc->mDataLen];
+    }
+    pRealData = pDst->mPImgData;
+    *pDst = *pSrc;
+    pDst->mPImgData = pRealData;
+    memcpy(pDst->mPImgData, pSrc->mPImgData, pSrc->mDataLen);
+  }
+}
+
+void HobotCodec::put_rosimg_frame(const sensor_msgs::msg::Image::ConstSharedPtr msg)
+{
+  TRecvImg oTmp = { 0 };
+  struct timespec time_in = {0, 0};
+  time_in.tv_nsec = msg->header.stamp.nanosec;
+  time_in.tv_sec = msg->header.stamp.sec;
+  oTmp.mWidth = msg->width;
+  oTmp.mHeight = msg->height;
+  oTmp.mDataLen = msg->data.size();
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+  // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d.\n",
+  // __func__, msg->width, msg->height, msg->data.size());
+}
+void HobotCodec::put_rosh26x_frame(const img_msgs::msg::H26XFrame::ConstSharedPtr msg)
+{
+  TRecvImg oTmp = { 0 };
+  struct timespec time_in = {0, 0};
+  time_in.tv_nsec = msg->dts.nanosec;
+  time_in.tv_sec = msg->dts.sec;
+  oTmp.mWidth = msg->width;
+  oTmp.mHeight = msg->height;
+  oTmp.mDataLen = msg->data.size();
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+  // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d.\n",
+  // __func__, msg->width, msg->height, msg->data.size());
+}
+
 #ifdef SHARED_MEM_MSG
+void HobotCodec::put_hbm_frame(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg)
+{
+  TRecvImg oTmp = { 0 };
+  struct timespec time_in = {0, 0};
+  time_in.tv_nsec = msg->time_stamp.nanosec;
+  time_in.tv_sec = msg->time_stamp.sec;
+  oTmp.mWidth = msg->width;
+  oTmp.mHeight = msg->height;
+  oTmp.mDataLen = msg->data_size;
+  // oTmp.mPImgData = new unsigned char[msg->data_size];
+  // memcpy(oTmp.mPImgData, msg->data.data(), msg->data_size);
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+}
+
+void HobotCodec::put_hbmh264_frame(const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg)
+{
+  TRecvImg oTmp = { 0 };
+  struct timespec time_in = {0, 0};
+  time_in.tv_nsec = msg->dts.nanosec;
+  time_in.tv_sec = msg->dts.sec;
+  oTmp.mWidth = msg->width;
+  oTmp.mHeight = msg->height;
+  oTmp.mDataLen = msg->data_size;
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+}
+
+void HobotCodec::in_hbmemh264_topic_cb(
+    const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg) {
+  struct timespec time_now = {0, 0}, time_end = {0, 0}, time_in = {0, 0};
+  clock_gettime(CLOCK_REALTIME, &time_now);
+  time_in.tv_nsec = msg->dts.nanosec;
+  time_in.tv_sec = msg->dts.sec;
+  uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+
+  std::stringstream ss;
+  ss << "in_hbmemh264_topic_cb img: " << msg->encoding.data()
+  << ", stamp: " << msg->dts.sec
+  << "." << msg->dts.nanosec;
+  RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
+#ifdef THRD_CODEC_PUT
+  put_hbmh264_frame(msg);
+#else
+  if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(msg->width, msg->height)) {
+    m_pHwCodec->PutData(msg->data.data(), msg->data_size, time_in);
+    clock_gettime(CLOCK_REALTIME, &time_end);
+    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,w:h=%d:%d,tmlaps %d ms,dLen=%d,laps %d.\n",
+     __func__, msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now),
+     msg->data_size, (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
+  }
+#endif
+}
+
 void HobotCodec::in_hbmem_topic_cb(
     const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg) {
   struct timespec time_now = {0, 0}, time_end = {0, 0}, time_in = {0, 0};
@@ -249,19 +449,29 @@ void HobotCodec::in_hbmem_topic_cb(
   time_in.tv_nsec = msg->time_stamp.nanosec;
   time_in.tv_sec = msg->time_stamp.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
-  /* if (0 == s_nSave) {
-    TestSave("/userdata/test.rgb", (char*)msg->data.data(), msg->data.size());
-    s_nSave = 1;
-  }
-  */
   std::stringstream ss;
   ss << "in_hbmem_topic_cb img: " << msg->encoding.data()
   << ", stamp: " << msg->time_stamp.sec
   << "." << msg->time_stamp.nanosec;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
-  if (nullptr != m_pHwCodec) {
-    m_pHwCodec->Start(msg->width, msg->height);
+
+#ifdef THRD_CODEC_PUT
+  put_hbm_frame(msg);
+  /*TRecvImg oTmp = { 0 };
+  oTmp.mWidth = msg->width;
+  oTmp.mHeight = msg->height;
+  oTmp.mDataLen = msg->data_size;
+  // oTmp.mPImgData = new unsigned char[msg->data_size];
+  // memcpy(oTmp.mPImgData, msg->data.data(), msg->data_size);
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+  RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d.\n", __func__, msg->width, msg->height, msg->data_size);*/
+#else
+  if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(msg->width, msg->height)) {
     if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
+      int nYuvLen = msg->width * msg->height * 3 / 2;
       if (nullptr == mPtrInNv12)
         mPtrInNv12 = new uint8_t[msg->width * msg->height * 3 / 2];
       if (0 == in_format_.compare("bgr8") && mPtrInNv12) {
@@ -269,7 +479,7 @@ void HobotCodec::in_hbmem_topic_cb(
       } else {
         video_utils::RGB24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
       }
-      m_pHwCodec->PutData(mPtrInNv12, msg->data_size, time_in);
+      m_pHwCodec->PutData(mPtrInNv12, nYuvLen, time_in);
     } else {
       m_pHwCodec->PutData(msg->data.data(), msg->data_size, time_in);
     }
@@ -278,12 +488,12 @@ void HobotCodec::in_hbmem_topic_cb(
      msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now), msg->data_size,
       (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
   }
+#endif
 }
 #endif
 
-#ifdef H26X_CODEC
 void HobotCodec::in_ros_h26x_topic_cb(
-    const codec_msgs::msg::H26XFrame::ConstSharedPtr msg) {
+    const img_msgs::msg::H26XFrame::ConstSharedPtr msg) {
   struct timespec time_now = {0, 0}, time_in = {0, 0}, time_end = {0, 0};
   clock_gettime(CLOCK_REALTIME, &time_now);
   time_in.tv_nsec = msg->dts.nanosec;
@@ -302,8 +512,10 @@ void HobotCodec::in_ros_h26x_topic_cb(
       sub_imgraw_tp_ = std::chrono::system_clock::now();
     }
   }
-  if (nullptr != m_pHwCodec) {
-    m_pHwCodec->Start(msg->width, msg->height);
+#ifdef THRD_CODEC_PUT
+  put_rosh26x_frame(msg);
+#else
+  if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(msg->width, msg->height)) {
     m_pHwCodec->PutData(msg->data.data(), msg->data.size(), time_in);
     clock_gettime(CLOCK_REALTIME, &time_end);
     RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,frm w:h=%d:%d, tmlaps %d ms,dLen=%d,laps %d.\n",
@@ -311,10 +523,10 @@ void HobotCodec::in_ros_h26x_topic_cb(
       tool_calc_time_laps(time_in, time_now), msg->data.size(),
       (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
   }
+#endif
 
   return;
 }
-#endif
 
 void HobotCodec::in_ros_topic_cb(
     const sensor_msgs::msg::Image::ConstSharedPtr msg) {
@@ -337,17 +549,21 @@ void HobotCodec::in_ros_topic_cb(
       sub_imgraw_tp_ = std::chrono::system_clock::now();
     }
   }
-  if (nullptr != m_pHwCodec) {
-    m_pHwCodec->Start(msg->width, msg->height);
+
+#ifdef THRD_CODEC_PUT
+  put_rosimg_frame(msg);
+#else
+  if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(msg->width, msg->height)) {
     if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
+      int nYuvLen = msg->width * msg->height * 3 / 2;
       if (nullptr == mPtrInNv12)
-        mPtrInNv12 = new uint8_t[msg->width * msg->height * 3 / 2];
+        mPtrInNv12 = new uint8_t[nYuvLen];
       if (0 == in_format_.compare("bgr8") && mPtrInNv12) {
         video_utils::BGR24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
       } else {
         video_utils::RGB24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
       }
-      m_pHwCodec->PutData(mPtrInNv12, msg->data.size(), time_in);
+      m_pHwCodec->PutData(mPtrInNv12, nYuvLen, time_in);
     } else {
       m_pHwCodec->PutData(msg->data.data(), msg->data.size(), time_in);
     }
@@ -356,8 +572,25 @@ void HobotCodec::in_ros_topic_cb(
       msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now), msg->data.size(),
       (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
   }
+#endif
 
   return;
+}
+
+void HobotCodec::put_compressedimg_frame(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
+{
+  TRecvImg oTmp = { 0 };
+  struct timespec time_in = {0, 0};
+  time_in.tv_nsec = msg->header.stamp.nanosec;
+  time_in.tv_sec = msg->header.stamp.sec;
+  oTmp.mWidth = 1920;
+  oTmp.mHeight = 1080;
+  oTmp.mDataLen = msg->data.size();
+  oTmp.mPImgData = (unsigned char*)msg->data.data();
+  snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->format.data());
+  oTmp.time_stamp = time_in;
+  m_arrRecvImg.enqueue(oTmp, DeepInitItem);
+  RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->%s sz=%d.\n", __func__, oTmp.encoding, msg->data.size());
 }
 void HobotCodec::in_ros_compressed_cb(
   const sensor_msgs::msg::CompressedImage::ConstSharedPtr img_msg) {
@@ -376,10 +609,13 @@ void HobotCodec::in_ros_compressed_cb(
   << ", data size: " << img_msg->data.size();
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
 
-  if (nullptr != m_pHwCodec) {
-    m_pHwCodec->Start(1920, 1080);
+#ifdef THRD_CODEC_PUT
+  put_compressedimg_frame(img_msg);
+#else
+  if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(1920, 1080)) {
     m_pHwCodec->PutData(img_msg->data.data(), img_msg->data.size(), time_in);
   }
+#endif
 }
 
 // codec dec 和 enc 是不一样的接口？
@@ -392,7 +628,6 @@ void HobotCodec::timer_ros_pub()
       clock_gettime(CLOCK_REALTIME, &time_start);
       if (0 == out_format_.compare("h264") ||
         0 == out_format_.compare("h265") ) {
-#ifdef H26X_CODEC
         frameh26x_sub_->index = m_pHwCodec->GetFrameNum();
         frameh26x_sub_->dts.sec = oFrame.time_stamp.tv_sec;
         frameh26x_sub_->dts.nanosec = oFrame.time_stamp.tv_nsec;
@@ -404,8 +639,7 @@ void HobotCodec::timer_ros_pub()
 
         frameh26x_sub_->data.resize(oFrame.mDataLen);
         memcpy(&frameh26x_sub_->data[0], oFrame.mPtrData, oFrame.mDataLen);
-        ros_image_publisher_->publish(*frameh26x_sub_);
-#endif
+        ros_h26ximage_publisher_->publish(*frameh26x_sub_);
       } else {
         img_pub_->header.stamp.sec = oFrame.time_stamp.tv_sec;
         img_pub_->header.stamp.nanosec = oFrame.time_stamp.tv_nsec;
@@ -416,7 +650,7 @@ void HobotCodec::timer_ros_pub()
         if (HB_PIXEL_FORMAT_NV12 == oFrame.mFrameFmt) {
           if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
             int nRgbLen = oFrame.mHeight * oFrame.mWidth * 3;
-            if (nullptr == mPtrInNv12)
+            if (nullptr == mPtrOutRGB2)
               mPtrOutRGB2 = new uint8_t[nRgbLen];
             if (mPtrOutRGB2) {
               if (0 == out_format_.compare("bgr8")) {
@@ -440,12 +674,11 @@ void HobotCodec::timer_ros_pub()
         }
         std::stringstream ss;
         ss << "timer_ros_pub img: " << img_pub_->encoding
-        // << ", w: " << img_msg->width
-        // << ", h: " << img_msg->height
         << ", stamp: " << img_pub_->header.stamp.sec
         << "." << img_pub_->header.stamp.nanosec;
         RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
-        ros_image_publisher_->publish(*img_pub_);
+        if (ros_image_publisher_)
+          ros_image_publisher_->publish(*img_pub_);
       }
       m_pHwCodec->ReleaseFrame(&oFrame);
 
@@ -462,51 +695,67 @@ void HobotCodec::timer_hbmem_pub()
 #ifdef SHARED_MEM_MSG
   if (nullptr != m_pHwCodec) {
     TFrameData oFrame;
-    if (m_pHwCodec->GetFrame(&oFrame)) {
-      auto loanedMsg = publisher_hbmem_->borrow_loaned_message();
-      if (loanedMsg.is_valid()) {
-        auto& msg = loanedMsg.get();
-        // struct timespec time_start = {0, 0};
-        // clock_gettime(CLOCK_REALTIME, &time_start);
-        // msg.time_stamp = (time_start.tv_sec * 1000 + time_start.tv_nsec / 1000000);
-        msg.time_stamp.sec = oFrame.time_stamp.tv_sec;
-        msg.time_stamp.nanosec = oFrame.time_stamp.tv_nsec;
-        memcpy(msg.encoding.data(), out_format_.c_str(), out_format_.length());
-        msg.height = oFrame.mHeight;
-        msg.width = oFrame.mWidth;
-        msg.step = oFrame.mWidth;
-        msg.data_size = oFrame.mDataLen;
-        int nOffSet = oFrame.mHeight * oFrame.mWidth;
-        if (HB_PIXEL_FORMAT_NV12 == oFrame.mFrameFmt) {
-          if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
-            int nRgbLen = oFrame.mHeight * oFrame.mWidth * 3;
-            msg.data_size = nRgbLen;
-            if (nullptr == mPtrInNv12)
-              mPtrOutRGB2 = new uint8_t[nRgbLen];
-            if (mPtrOutRGB2) {
-              if (0 == out_format_.compare("bgr8")) {
-                video_utils::NV12_TO_BGR24(oFrame.mPtrY, oFrame.mPtrUV, mPtrOutRGB2, oFrame.mWidth , oFrame.mHeight);
-              } else {
-                video_utils::NV12_TO_RGB24(oFrame.mPtrY, oFrame.mPtrUV, mPtrOutRGB2, oFrame.mWidth , oFrame.mHeight);
+    if (0 == m_pHwCodec->GetFrame(&oFrame)) {
+      if (0 == out_format_.compare("h264") ||
+        0 == out_format_.compare("h265") ) {
+        auto loanedMsg = h264hbmem_publisher_->borrow_loaned_message();
+        if (loanedMsg.is_valid()) {
+          auto& msg = loanedMsg.get();
+          msg.dts.sec = oFrame.time_stamp.tv_sec;
+          msg.dts.nanosec = oFrame.time_stamp.tv_nsec;
+          msg.pts.sec = oFrame.time_stamp.tv_sec;
+          msg.pts.nanosec = oFrame.time_stamp.tv_nsec;
+          msg.data_size = oFrame.mDataLen;
+          memcpy(msg.encoding.data(), out_format_.c_str(), out_format_.length());
+          memcpy(msg.data.data(), oFrame.mPtrData, oFrame.mDataLen);
+          msg.index = mSendIdx++;
+          h264hbmem_publisher_->publish(std::move(loanedMsg));
+        } else {
+          RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "hbm_h26x borrow_loaned_message failed");
+        }
+      } else {
+        auto loanedMsg = hbmem_publisher_->borrow_loaned_message();
+        if (loanedMsg.is_valid()) {
+          auto& msg = loanedMsg.get();
+          msg.time_stamp.sec = oFrame.time_stamp.tv_sec;
+          msg.time_stamp.nanosec = oFrame.time_stamp.tv_nsec;
+          memcpy(msg.encoding.data(), out_format_.c_str(), out_format_.length());
+          msg.height = oFrame.mHeight;
+          msg.width = oFrame.mWidth;
+          msg.step = oFrame.mWidth;
+          msg.data_size = oFrame.mDataLen;
+          int nOffSet = oFrame.mHeight * oFrame.mWidth;
+          if (HB_PIXEL_FORMAT_NV12 == oFrame.mFrameFmt) {
+            if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
+              int nRgbLen = oFrame.mHeight * oFrame.mWidth * 3;
+              msg.data_size = nRgbLen;
+              if (nullptr == mPtrOutRGB2)
+                mPtrOutRGB2 = new uint8_t[nRgbLen];
+              if (mPtrOutRGB2) {
+                if (0 == out_format_.compare("bgr8")) {
+                  video_utils::NV12_TO_BGR24(oFrame.mPtrY, oFrame.mPtrUV, mPtrOutRGB2, oFrame.mWidth , oFrame.mHeight);
+                } else {
+                  video_utils::NV12_TO_RGB24(oFrame.mPtrY, oFrame.mPtrUV, mPtrOutRGB2, oFrame.mWidth , oFrame.mHeight);
+                }
+                memcpy(msg.data.data(), mPtrOutRGB2, nRgbLen);
               }
-              memcpy(msg.data.data(), mPtrOutRGB2, nRgbLen);
+            } else {
+              memcpy(msg.data.data(), oFrame.mPtrY, nOffSet);
+              memcpy(msg.data.data() + nOffSet, oFrame.mPtrUV,
+                nOffSet / 2);
             }
           } else {
-            memcpy(msg.data.data(), oFrame.mPtrY, nOffSet);
-            memcpy(msg.data.data() + nOffSet, oFrame.mPtrUV,
-              nOffSet / 2);
+            memcpy(msg.data.data(), oFrame.mPtrData, oFrame.mDataLen);
           }
+          msg.index = mSendIdx++;
+          hbmem_publisher_->publish(std::move(loanedMsg));
+          RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->pub=0x%x,encoding=%s data %d.\n",
+            __func__, hbmem_publisher_, msg.encoding.data(), oFrame.mDataLen);
         } else {
-          memcpy(msg.data.data(), oFrame.mPtrData, oFrame.mDataLen);
+          RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "borrow_loaned_message failed");
         }
-        msg.index = mSendIdx++;
-        publisher_hbmem_->publish(std::move(loanedMsg));
-        m_pHwCodec->ReleaseFrame(&oFrame);
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->pub=0x%x,encoding=%s data %d.\n",
-          __func__, publisher_hbmem_, msg.encoding.data(), oFrame.mDataLen);
-      } else {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "borrow_loaned_message failed");
       }
+      m_pHwCodec->ReleaseFrame(&oFrame);
     }
   }
 #endif

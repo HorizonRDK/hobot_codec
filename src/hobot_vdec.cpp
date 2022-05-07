@@ -31,32 +31,32 @@ int HobotVdec::child_stop()
     for (int i = 0; i < m_nMMZCnt; i++) {
         s32Ret = HB_SYS_Free(m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i]);
         if (s32Ret == 0) {
-            printf("mmzFree paddr = 0x%x, vaddr = 0x%x i = %d \n", m_arrMMZ_PAddr[i],
+            ROS_printf(2, "mmzFree paddr = 0x%x, vaddr = 0x%x i = %d \n", m_arrMMZ_PAddr[i],
                     m_arrMMZ_VAddr[i], i);
         }
     }
     s32Ret = HB_VP_Exit();
     if (s32Ret == 0) {
-        printf("vp exit ok!\n");
+        ROS_printf(1, "vp exit ok!\n");
     }
 
     s32Ret = HB_VDEC_StopRecvStream(m_nCodecChn);
     if (s32Ret != 0) {
-        printf("HB_VDEC_StopRecvStream failed\n");
+        ROS_printf(0, "HB_VDEC_StopRecvStream failed\n");
         return -1;
     }
     HB_VDEC_ResetChn(m_nCodecChn);
     s32Ret = HB_VDEC_DestroyChn(m_nCodecChn);
     if (s32Ret != 0) {
-        printf("HB_VDEC_DestroyChn failed\n");
+        ROS_printf(0, "HB_VDEC_DestroyChn failed\n");
         return -1;
     }
 
     s32Ret = HB_VDEC_Module_Uninit();
     if (s32Ret) {
-        printf("HB_VDEC_Module_Uninit: %d\n", s32Ret);
+        ROS_printf(0, "HB_VDEC_Module_Uninit: %d\n", s32Ret);
     }
-    printf("Done\n");
+    ROS_printf(2, "Done\n");
     return 0;
 }
 
@@ -108,7 +108,7 @@ int HobotVdec::chnAttr_init() {
         // 配置crop，不启用
         m_oVdecChnAttr.stAttrJpeg.stCropCfg.bEnable = HB_FALSE;
     }
-    printf("[chnAttr_init]->type=%s, %d.\n", m_tsCodecType, m_enPalType);
+    ROS_printf(2, "[chnAttr_init]->type=%s, %d.\n", m_tsCodecType, m_enPalType);
     return 0;
 }
 
@@ -119,18 +119,18 @@ int HobotVdec::init_vdec()
     // 初始化channel属性
     s32Ret = chnAttr_init();
     if (s32Ret) {
-        printf("sample_venc_ChnAttr_init failded: %d\n", s32Ret);
+        ROS_printf(0, "sample_venc_ChnAttr_init failded: %d\n", s32Ret);
     }
     // 创建channel
     s32Ret = HB_VDEC_CreateChn(m_nCodecChn, &m_oVdecChnAttr);
     if (s32Ret != 0) {
-        printf("HB_VDEC_CreateChn %d failed, %x.\n", m_nCodecChn, s32Ret);
+        ROS_printf(0, "HB_VDEC_CreateChn %d failed, %x.\n", m_nCodecChn, s32Ret);
         return -1;
     }
     // 设置channel属性
     s32Ret = HB_VDEC_SetChnAttr(m_nCodecChn, &m_oVdecChnAttr);  // config
     if (s32Ret != 0) {
-        printf("HB_VDEC_SetChnAttr failed\n");
+        ROS_printf(0, "HB_VDEC_SetChnAttr failed\n");
         return -1;
     }
     VENC_RECV_PIC_PARAM_S pstRecvParam;
@@ -138,7 +138,7 @@ int HobotVdec::init_vdec()
 
     s32Ret = HB_VDEC_StartRecvStream(m_nCodecChn);
     if (s32Ret != 0) {
-        printf("HB_VDEC_StartRecvStream failed\n");
+        ROS_printf(0, "HB_VDEC_StartRecvStream failed\n");
         return -1;
     }
     pthread_cond_signal(&m_condInit);
@@ -154,7 +154,7 @@ int HobotVdec::init_vdec()
     for (i = 0; i < m_nMMZCnt; i++) {
         s32Ret = HB_SYS_Alloc(&m_arrMMZ_PAddr[i], reinterpret_cast<void **>(&m_arrMMZ_VAddr[i]), mmz_size);
         if (s32Ret == 0) {
-            printf("mmzAlloc paddr = 0x%x, vaddr = 0x%x i = %d \n",
+            ROS_printf(2, "mmzAlloc paddr = 0x%x, vaddr = 0x%x i = %d \n",
                     m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i], i);
         }
     }
@@ -176,18 +176,18 @@ int HobotVdec::child_start(int nPicWidth, int nPicHeight) {
     HB_VP_SetConfig(&struVpConf);
     s32Ret = HB_VP_Init();
     if (s32Ret != 0) {
-        printf("vp_init fail s32Ret = %d !\n", s32Ret);
+        ROS_printf(0, "vp_init fail s32Ret = %d !\n", s32Ret);
     }
     // m_nCodecChn = 0;
     pthread_mutex_init(&m_lckInit, NULL);
     pthread_cond_init(&m_condInit, NULL);
     s32Ret = HB_VDEC_Module_Init();
     if (s32Ret) {
-        printf("HB_VDEC_Module_Init: %d\n", s32Ret);
+        ROS_printf(0, "HB_VDEC_Module_Init: %d\n", s32Ret);
     }
     init_vdec();
     m_nCodecSt = enCT_START;
-    printf("HB_VDEC_Module_Init: %d end.\n", s32Ret);
+    ROS_printf(2, "HB_VDEC_Module_Init: %d end.\n", s32Ret);
     return 0;
 }
 typedef enum
@@ -241,14 +241,14 @@ int findH26xNalu(const unsigned char* p_pszData, int p_nDataLen, unsigned char* 
     return -1;
 }
 
-int findSPSPPSVPS(int p_nStreamType, unsigned char* p_pszFrameData, int p_nDataLen, int* p_pnSPS,
+int findSPSPPSVPS(int p_nStreamType, const unsigned char* p_pszFrameData, int p_nDataLen, int* p_pnSPS,
     int* p_pnPPS, int* p_pnVPS, int* p_pnSPSLen, int* p_pnPPSLen, int* p_pnVPSLen, int p_nStartCodeLen)
 {
     int nNaluLen[4] = { 0 };  // 包含开始码长度
     int nStartCodePos[4] = { 0 };
     unsigned char nNaluType[4] = { 0 };
     int nNaluNum = 0;
-    unsigned char *pCheckMem = p_pszFrameData;
+    const unsigned char *pCheckMem = p_pszFrameData;
     int nLeftData = p_nDataLen;
     int nNalLen = 0;
     do {
@@ -260,9 +260,8 @@ int findSPSPPSVPS(int p_nStreamType, unsigned char* p_pszFrameData, int p_nDataL
         nStartCodePos[nNaluNum] = (pCheckMem - p_pszFrameData);
         pCheckMem += nNaluLen[nNaluNum];
         nLeftData -= nNaluLen[nNaluNum];
-        /*printf("[findSPSPPSVPS_new]->type=%d,naLen=%d,start=%d.\n",
-            nNaluType[nNaluNum],nNaluLen[nNaluNum],nStartCodePos[nNaluNum]);
-        */
+        // ROS_printf("[findSPSPPSVPS]->type=%d,naLen=%d,start=%d.\n",
+        //   nNaluType[nNaluNum],nNaluLen[nNaluNum],nStartCodePos[nNaluNum]);
         ++nNaluNum;
     } while (1);
     // 根据nNaluType来输出
@@ -303,6 +302,17 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
         // h26X 前几帧没有 I 帧，解码失败是正常的，只要不崩溃就可以
+        if (m_enPalType != PT_JPEG) {
+            // 检查是否是I 帧
+            unsigned char *pszSPS = NULL, *pszPPS = NULL, *pszVPS = NULL;
+            int nSPSPos = 0, nPPSPos = 0, nVPSPos = 0;
+            int nSPSLen = 0, nPPSLen = 0, nVPSLen = 0;
+            int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
+                nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
+            if (nSPSLen <= 0) {
+                return -1;
+            }
+        }
         VIDEO_FRAME_S pstFrame;
         VIDEO_STREAM_S pstStream;
         memset(&pstFrame, 0, sizeof(VIDEO_FRAME_S));
@@ -311,7 +321,8 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         VDEC_CHN_STATUS_S pstStatus;
         HB_VDEC_QueryStatus(m_nCodecChn, &pstStatus);
         if (pstStatus.cur_input_buf_cnt >= (uint32_t)m_nMMZCnt) {
-            printf("[HB_VDEC_QueryStatus]->dlen=%d, inbufCnt=%d ->%d.\n", nLen, pstStatus.cur_input_buf_cnt, m_nMMZCnt);
+            ROS_printf(0, "[HB_VDEC_QueryStatus]->dlen=%d, inbufCnt=%d ->%d.\n",
+                nLen, pstStatus.cur_input_buf_cnt, m_nMMZCnt);
             usleep(10000);
             return -1;
         }
@@ -323,13 +334,12 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         pstStream.pstPack.size = nLen;
         pstStream.pstPack.stream_end = HB_FALSE;   // TRUE 就结束
         s32Ret = HB_VDEC_SendStream(m_nCodecChn, &pstStream, 3000);
-        printf("[PutData] pts:%d, vir_ptr:%x, size:%d, ret=%d.\n",
+        ROS_printf(2, "[PutData] pts:%d, vir_ptr:%x, size:%d, ret=%d.\n",
                 pstStream.pstPack.pts,
                 pstStream.pstPack.vir_ptr,
                 pstStream.pstPack.size, s32Ret);
         if (s32Ret == -HB_ERR_VDEC_OPERATION_NOT_ALLOWDED ||
                     s32Ret == -HB_ERR_VDEC_UNKNOWN) {
-            // printf("HB_VDEC_SendStream failed\n");
             return -2;
         }
         HWCodec::PutData(pDataIn, nLen, time_stamp);
@@ -352,7 +362,8 @@ int HobotVdec::ReleaseFrame(TFrameData *pFrame)
         // VIDEO_FRAME_S curFrameInfo;
         // curFrameInfo.stVFrame.vir_ptr[0] = (hb_char*)pFrame->mPtrY;
         // curFrameInfo.stVFrame.vir_ptr[1] = (hb_char*)pFrame->mPtrUV;
-        printf("[%s] 0x%x- 0x%x, %dx%d\n", __func__, pFrame->mPtrY, pFrame->mPtrUV, pFrame->mWidth, pFrame->mHeight);
+        ROS_printf(2, "[%s] 0x%x- 0x%x, %dx%d\n", __func__,
+            pFrame->mPtrY, pFrame->mPtrUV, pFrame->mWidth, pFrame->mHeight);
         return HB_VDEC_ReleaseFrame(m_nCodecChn, &m_curFrameInfo);
     }
     return 0;
@@ -378,7 +389,7 @@ int HobotVdec::GetFrame(TFrameData *pOutFrm) {
                 pOutFrm->mWidth = m_curFrameInfo.stVFrame.width;
                 pOutFrm->mHeight = m_curFrameInfo.stVFrame.height;
                 pOutFrm->mFrameFmt = HB_PIXEL_FORMAT_NV12;  // 通通 nv12
-                printf("[%s]->0x%x:0x%x 1-0x%x, w:h=%dx%d, dlen=%d.\n",
+                ROS_printf(2, "[%s]->0x%x:0x%x 1-0x%x, w:h=%dx%d, dlen=%d.\n",
                     __func__, pOutFrm->mPtrY, m_curFrameInfo.stVFrame.vir_ptr[0], m_curFrameInfo.stVFrame.vir_ptr[1],
                     m_curFrameInfo.stVFrame.width, m_curFrameInfo.stVFrame.height, pOutFrm->mDataLen);
                 if (0 == s_test) {
@@ -391,7 +402,7 @@ int HobotVdec::GetFrame(TFrameData *pOutFrm) {
                 // HB_VDEC_ReleaseFrame(m_nCodecChn, &m_curFrameInfo);
                 return 0;
             } else {
-                printf("HB_VDEC_GetFrame failed:%d\n", s32Ret);
+                ROS_printf(0, "HB_VDEC_GetFrame failed:%d\n", s32Ret);
                 usleep(5000);
                 return -1;
             }

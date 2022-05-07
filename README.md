@@ -94,7 +94,8 @@ SHARED_MEM
 export COLCON_CURRENT_PREFIX=./install
 source ./install/local_setup.sh
 ros2 run hobot_codec hobot_codec_republish
-# 目前参数列表：
+```
+### 目前参数列表：
 
 参数名 | 含义 | 取值 | 默认值
 ---|---|---|---
@@ -108,24 +109,35 @@ pub_topic   | 发布的话题名字       | 任意字符串                     
 enc_qp      | 264/265编码质量     | 浮点数 0-100                    | 10.0
 jpg_quality | jpeg 编码质量       | 浮点数 0-100                    | 60.0
 
+### 注意：
+
+    由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持，720P/D1/VGA 系列部分支持。
+
 
 解码 jpeg 测试：
 ```
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=960 -p image_height:=540
+ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
+// 先用获取的 mipi_cam 的数据进行 jpeg 编码
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
 
-ros2 run image_transport republish raw compressed --ros-args --remap in:=/image_raw --remap out/compressed:=/image_raw/compressed
-
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=jpeg -p out_mode:=ros -p out_format:=rgb8 -p sub_topic:=/image_raw/compressed -p pub_topic:=/image_raw_nv12
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=jpeg -p out_mode:=ros -p out_format:=rgb8 -p sub_topic:=/image_jpeg -p pub_topic:=/image_raw_nv12
 ```
 编码 jpeg 测试：
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=960 -p image_height:=540 -p out_format:=nv12
+```
+ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
 
 ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
 
-share memory
+#share memory
 ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg
+```
+编解码 h264 测试：
+```
+ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12
 
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=h264 -p sub_topic:=/image_raw -p pub_topic:=/image_h264
 
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=h264 -p out_mode:=ros -p out_format:=nv12 -p sub_topic:=/image_h264 -p pub_topic:=/image_nv12
 ```
 
 ## X3 linaro系统

@@ -33,32 +33,32 @@ int HobotVenc::child_stop()
     for (int i = 0; i < m_nMMZCnt; i++) {
         s32Ret = HB_SYS_Free(m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i]);
         if (s32Ret == 0) {
-            printf("mmzFree paddr = 0x%x, vaddr = 0x%x i = %d \n", m_arrMMZ_PAddr[i],
+            ROS_printf(2, "mmzFree paddr = 0x%x, vaddr = 0x%x i = %d \n", m_arrMMZ_PAddr[i],
                     m_arrMMZ_VAddr[i], i);
         }
     }
     s32Ret = HB_VENC_StopRecvFrame(m_nCodecChn);
     if (s32Ret != 0) {
-        printf("HB_VENC_StopRecvFrame failed\n");
+        ROS_printf(0, "HB_VENC_StopRecvFrame failed\n");
         return -1;
     }
     s32Ret = HB_VENC_DestroyChn(m_nCodecChn);
     if (s32Ret != 0) {
-        printf("HB_VENC_DestroyChn failed\n");
+        ROS_printf(0, "HB_VENC_DestroyChn failed\n");
         return -1;
     }
     s32Ret = HB_VP_Exit();
     if (s32Ret == 0) {
-        printf("vp exit ok!\n");
+        ROS_printf(2, "vp exit ok!\n");
     }
     s32Ret = HB_VENC_Module_Uninit();
     if (s32Ret) {
-        printf("HB_VENC_Module_Uninit: %d\n", s32Ret);
+        ROS_printf(0, "HB_VENC_Module_Uninit: %d\n", s32Ret);
     }
     return 0;
 }
-// #define THRD_INIT
-void HobotVenc::exec_init()
+
+int HobotVenc::exec_init()
 {
     int s32Ret;
     m_nCodecSt = 100;
@@ -66,71 +66,78 @@ void HobotVenc::exec_init()
     pthread_cond_init(&m_condInit, NULL);
 
     s32Ret = HB_VENC_Module_Init();
-    if (s32Ret) {
-        printf("HB_VENC_Module_Init: %d\n", s32Ret);
-    }
+    ROS_printf(2, "===>HB_VENC_Module_Init: %d\n", s32Ret);
     // 初始化VP
     VP_CONFIG_S struVpConf;
     memset(&struVpConf, 0x00, sizeof(VP_CONFIG_S));
     struVpConf.u32MaxPoolCnt = 32;
     HB_VP_SetConfig(&struVpConf);
     s32Ret = HB_VP_Init();
-    if (s32Ret != 0) {
-        printf("vp_init fail s32Ret = %d !\n", s32Ret);
-    }
+    ROS_printf(2, "===>vp_init s32Ret = %d !\n", s32Ret);
 
-    init_venc();
+    if (0 != init_venc()) {
+        HB_VP_Exit();
+        HB_VENC_Module_Uninit();
+        abort();  // 直接退出
+        return -1;
+    }
     // Create(nPicWidth, nPicHeight, 8000);
     VENC_RECV_PIC_PARAM_S pstRecvParam;
     pstRecvParam.s32RecvPicNum = 0;  // unchangable
 
     s32Ret = HB_VENC_StartRecvFrame(m_nCodecChn, &pstRecvParam);
+    ROS_printf(2, "HB_VENC_StartRecvFrame chn=%d,ret=%d.\n", m_nCodecChn, s32Ret);
     if (s32Ret != 0) {
-        printf("HB_VENC_StartRecvFrame failed\n");
-        return;
+        abort();  // 直接退出
+        return -2;
     }
 
     // 准备buffer
     int i = 0, error = 0;
     for (i = 0; i < m_nMMZCnt; i++) {
         m_arrMMZ_VAddr[i] = NULL;
+        m_arrMMZ_PAddr[i] = 0;
     }
-    memset(m_arrMMZ_PAddr, 0, sizeof(m_arrMMZ_PAddr));
+    // memset(m_arrMMZ_PAddr, 0, sizeof(m_arrMMZ_PAddr));
     int mmz_size = m_nPicWidth * m_nPicHeight * 3 / 2;
     for (i = 0; i < m_nMMZCnt; i++) {
         // s32Ret = HB_SYS_Alloc(&m_arrMMZ_PAddr[i], reinterpret_cast<void **>(&m_arrMMZ_VAddr[i]), mmz_size);
         s32Ret = HB_SYS_Alloc(&m_arrMMZ_PAddr[i], reinterpret_cast<void **>(&m_arrMMZ_VAddr[i]), mmz_size);
         if (s32Ret == 0) {
-            printf("mmzAlloc w:h=%d:%d, paddr = 0x%x, vaddr = 0x%x i = %d \n",
+            ROS_printf(2, "mmzAlloc w:h=%d:%d, paddr = 0x%x, vaddr = 0x%x i = %d \n",
                 m_nPicWidth, m_nPicHeight, m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i], i);
         }
     }
 
-    printf("[%s]: %d end.\n", __func__, s32Ret);
+    ROS_printf(2, "[%s]: %d end.\n", __func__, s32Ret);
     m_nCodecSt = enCT_START;
+    return 0;
 }
 
 int HobotVenc::child_start(int nPicWidth, int nPicHeight) {
     int s32Ret;
     int opt = 0;
-    if (enCT_START == m_nCodecSt)
+    if (enCT_START == m_nCodecSt) {
+        // 增加鲁棒性测试，由于可能没设置 ROS_DOMAIN_ID，可能会收到不同分辨率，不同分辨率直接失败不处理
+        if (m_nPicWidth != nPicWidth || m_nPicHeight != nPicHeight)
+            return -1;
         return 0;
+    }
     m_nPicWidth = nPicWidth;
     m_nPicHeight = nPicHeight;
-#ifdef THRD_INIT
-    if (100 != m_nCodecSt)
-        m_spThrdInit = std::make_shared<std::thread>(std::bind(&HobotVenc::exec_init, this));
-#else
-    exec_init();
-#endif
-    return 0;
+// #ifdef THRD_INIT
+    // if (100 != m_nCodecSt)
+    //    m_spThrdInit = std::make_shared<std::thread>(std::bind(&HobotVenc::exec_init, this));
+// #else
+    return exec_init();
+// #endif
 }
 
 void HobotVenc::SetCodecAttr(const char* tsName, float fVal)
 {
     if (0 == strcmp("jpg_quality", tsName)) {
         m_fJpgQuality = fVal;
-    } else if (0 == strcmp("jpg_quality", tsName)) {
+    } else if (0 == strcmp("enc_qp", tsName)) {
         m_fEncQp = fVal;
     }
 }
@@ -144,24 +151,26 @@ int HobotVenc::init_venc()
     pthread_mutex_lock(&m_lckInit);
     // 初始化channel属性
     s32Ret = chnAttr_init();
-    if (s32Ret) {
-        printf("sample_venc_ChnAttr_init failded: %d\n", s32Ret);
-    }
+    ROS_printf(2, "sample_venc_ChnAttr_init : %d\n", s32Ret);
     // 创建channel
     s32Ret = HB_VENC_CreateChn(m_nCodecChn, &m_oVencChnAttr);
+    ROS_printf(2, "HB_VENC_CreateChn type=%d, %d , %d.\n", m_enPalType, m_nCodecChn, s32Ret);
     if (s32Ret != 0) {
-        printf("HB_VENC_CreateChn %d failed, %x.\n", m_nCodecChn, s32Ret);
         return -1;
     }
     // 配置Rc参数
-    s32Ret = venc_setRcParam(8000);
-    if (s32Ret) {
-        printf("sample_venc_setRcParam failded: %d\n", s32Ret);
-    }
+    if (m_enPalType == PT_JPEG || m_enPalType == PT_MJPEG)
+        s32Ret = venc_setRcParam(8000);
+    else
+        s32Ret = venc_setRcParam(3000);
+    ROS_printf(2, "sample_venc_setRcParam ret: %d\n", s32Ret);
+
     // 设置channel属性
     s32Ret = HB_VENC_SetChnAttr(m_nCodecChn, &m_oVencChnAttr);  // config
+    ROS_printf(2, "HB_VENC_SetChnAttr ret=%d.\n", s32Ret);
     if (s32Ret != 0) {
-        printf("HB_VENC_SetChnAttr failed\n");
+        HB_VENC_DestroyChn(m_nCodecChn);
+        pthread_mutex_unlock(&m_lckInit);
         return -1;
     }
     pthread_cond_signal(&m_condInit);
@@ -170,6 +179,7 @@ int HobotVenc::init_venc()
 }
 // nv12
 static int s_enctest = 0;
+
 int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &time_stamp) {
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
@@ -182,25 +192,13 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         } else {
             tmSleep = 20 + m_tmLastPush - tmNow;
         }
-        int nTryNum = 0;
-        printf("[HB_VENC_SendFrame]->w:h=%d:%d,len=%d, use=%d - get=%d,last=%d, now=%d sleep %d ms,begin\n",
-            m_nPicWidth, m_nPicHeight, nLen, m_nUseCnt, m_nGetCnt, m_tmLastPush, tmNow, tmSleep);
-        /*if (tmSleep > 0)
-            usleep(tmSleep*1000);*/
+        if (tmSleep > 0) {
+            usleep(tmSleep * 1000);
+            ROS_printf(2, "[PutData]->chn=%d,w:h=%d:%d,len=%d, use=%d-get=%d,last=%d,now=%d sleep %d ms,begin\n",
+                m_nCodecChn, m_nPicWidth, m_nPicHeight, nLen, m_nUseCnt, m_nGetCnt, m_tmLastPush, tmNow, tmSleep);
+        }
         m_tmLastPush = tmNow;
-        do {
-            ++nTryNum;
-            if (nTryNum > 200) abort();
-            if ((m_nUseCnt - m_nGetCnt) > 0) {
-                // 先读取，存储起来，留给GetFrame 使用，不过会有内存碎片问题
-                // return -1;
-                usleep(10000);
-                continue;
-            }
-            break;
-        } while (1);
-        // m_MtxLstFrames.unlock();
-        VIDEO_FRAME_S pstFrame;
+        VIDEO_FRAME_S pstFrame = { 0 };  // 至关重要，有些变量要初始赋值为 0(false)
         int offset = m_nPicWidth * m_nPicHeight;
         m_nMMZidx = m_nUseCnt % m_nMMZCnt;
 
@@ -220,7 +218,6 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         m_nUseCnt++;  // wuwlNG
         s32Ret = HB_VENC_SendFrame(m_nCodecChn, &pstFrame, 3000);
         uint32_t tmNowWrite = video_utils::GetTickCount();
-        usleep(45*1000);
         /*if (0 == s_enctest) {
             char fileName[128] = { 0 };
             snprintf(fileName, sizeof(fileName), "enc-put-%d.nv12", 0);  // m_nUseCnt);
@@ -228,11 +225,10 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
             fwrite(pDataIn, nLen, 1, outFile);
             fclose(outFile);
         }*/
-        printf("[HB_VENC_SendFrame]->chn=%d,w:h=%d:%d,len=%d,idx=%d, use=%d,ret=%d ,write=%d ms end.\n",
+        ROS_printf(2, "[HB_VENC_SendFrame]->chn=%d,w:h=%d:%d,len=%d,idx=%d, use=%d,ret=%d ,write=%d ms end.\n",
             m_nCodecChn, m_nPicWidth, m_nPicHeight, nLen, m_nMMZidx, m_nUseCnt, s32Ret,
             video_utils::GetTickCount() - tmNowWrite);
-        if (s32Ret != 0)
-        {
+        if (s32Ret != 0) {
             return -1;
         }
         HWCodec::PutData(pDataIn, nLen, time_stamp);
@@ -252,20 +248,21 @@ int HobotVenc::ReleaseFrame(TFrameData *pFrame)
         int s32Ret = HB_VENC_ReleaseStream(m_nCodecChn, &m_curGetStream);
         m_curGetStream.pstPack.vir_ptr = NULL;
         m_curGetStream.pstPack.size = 0;
-        printf("[%s] 0x%x- %dx%d,ret=%d\n", __func__, pFrame->mPtrData, pFrame->mWidth, pFrame->mHeight, s32Ret);
+        if (s32Ret != 0)
+            ROS_printf(0, "[%s]0x%x-%dx%d,ret=%d\n", __func__,
+                pFrame->mPtrData, pFrame->mWidth, pFrame->mHeight, s32Ret);
         return s32Ret;
     }
     return 0;
 }
+
 int HobotVenc::GetFrame(TFrameData *pOutFrm) {
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
         // VIDEO_STREAM_S pstStream;
-        // if ((m_nUseCnt-m_nGetCnt) < 1)
-        //    return -1;
         do {
-            s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 1000);  // m_curGetStream
-            printf("[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d\n",
+            s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 3000);  // m_curGetStream
+            ROS_printf(2, "[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d\n",
                 m_nCodecChn, m_nPicWidth, m_nPicHeight, m_nGetCnt, m_curGetStream.pstPack.size, s32Ret);
             if (s32Ret != 0) {
                 usleep(10000);
@@ -278,12 +275,14 @@ int HobotVenc::GetFrame(TFrameData *pOutFrm) {
             pOutFrm->mHeight = m_nPicHeight;
             pOutFrm->mFrameFmt = m_enPalType;
             ++m_nGetCnt;
+#ifdef TEST_SAVE
             if (NULL == outH264File)
-                outH264File = fopen("enc.jpg", "wb");
+                outH264File = fopen("enc.dat", "wb");
             if (outH264File) {
                 fwrite(m_curGetStream.pstPack.vir_ptr,
                     m_curGetStream.pstPack.size, 1, outH264File);
             }
+#endif
             /*if (0 == s_enctest) {
                 FILE *outFile = fopen("enc.jpg", "wb");
                 fwrite(m_curGetStream.pstPack.vir_ptr,
@@ -384,6 +383,9 @@ int HobotVenc::chnAttr_init() {
     m_oVencChnAttr.stGopAttr.u32GopPresetIdx = 2;
     // 设置IDR帧类型
     m_oVencChnAttr.stGopAttr.s32DecodingRefreshType = 2;
+    ROS_printf(2, "[%s]->rc=%d, vlcSz=%d, streamSz=%d, type=j-%d:4-%d:5-%d cur=%d.\n",
+        __func__, m_oVencChnAttr.stRcAttr.enRcMode, m_oVencChnAttr.stVencAttr.vlc_buf_size,
+        m_oVencChnAttr.stVencAttr.u32BitStreamBufSize, PT_JPEG, PT_H264, PT_H265, m_enPalType);
     return 0;
 }
 
@@ -397,7 +399,7 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
         s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
         if (s32Ret != 0) {
-            printf("HB_VENC_GetRcParam failed.\n");
+            ROS_printf(0, "HB_VENC_GetRcParam failed.\n");
             return -1;
         }
         // 设置码率
@@ -408,14 +410,14 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         pstRcParam->stH264Cbr.u32IntraPeriod = 30;
         // 设置VbvBufferSize，与码率、解码器速率有关，一般在1000～5000
         pstRcParam->stH264Cbr.u32VbvBufferSize = 3000;
-        printf("[%s]->h264 enRcMode = %d, u32VbvBufferSize = %d, bitRate=%d mmmmmmmmmmmmmmmmmm   \n",
+        ROS_printf(2, "[%s]->h264 enRcMode = %d, u32VbvBufferSize = %d, bitRate=%d mmmmmmmmmmmmmmmmmm   \n",
             __func__, m_oVencChnAttr.stRcAttr.enRcMode, m_oVencChnAttr.stRcAttr.stH264Cbr.u32VbvBufferSize, bitRate);
     } else if (m_oVencChnAttr.stVencAttr.enType == PT_H265) {
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
         s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
         if (s32Ret != 0) {
-            printf("HB_VENC_GetRcParam failed.\n");
+            ROS_printf(0, "HB_VENC_GetRcParam failed.\n");
             return -1;
         }
         // 设置码率
@@ -426,7 +428,7 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         pstRcParam->stH265Cbr.u32IntraPeriod = 30;
         // 设置VbvBufferSize，与码率、解码器速率有关，一般在1000～5000
         pstRcParam->stH265Cbr.u32VbvBufferSize = 3000;
-        printf("[%s]->h265 enRcMode = %d, u32VbvBufferSize = %d, bitRate=%d mmmmmmmmmmmmmmmmmm   \n",
+        ROS_printf(0, "[%s]->h265 enRcMode = %d, u32VbvBufferSize = %d, bitRate=%d mmmmmmmmmmmmmmmmmm   \n",
             __func__, m_oVencChnAttr.stRcAttr.enRcMode, m_oVencChnAttr.stRcAttr.stH265Cbr.u32VbvBufferSize, bitRate);
     }
     return 0;
@@ -515,13 +517,13 @@ int HobotVenc::Create(int width, int height, int bits)
 
     s32Ret = HB_VENC_CreateChn(m_nCodecChn, &m_oVencChnAttr);
     if (s32Ret != 0) {
-        printf("HB_VENC_CreateChn %d failed, %d.\n", m_nCodecChn, s32Ret);
+        ROS_printf(0, "HB_VENC_CreateChn %d failed, %d.\n", m_nCodecChn, s32Ret);
         return -1;
     }
     // stModParam.u32OneStreamBuffer = 0;
     // s32Ret = HB_VENC_SetModParam(m_nCodecChn, &stModParam);
     // if (s32Ret != 0) {
-    //     printf("HB_VENC_SetModParam %d failed, %d.\n", m_nCodecChn, s32Ret);
+    //     ROS_printf("HB_VENC_SetModParam %d failed, %d.\n", m_nCodecChn, s32Ret);
     //     return -1;
     // }
 
@@ -530,7 +532,7 @@ int HobotVenc::Create(int width, int height, int bits)
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
         if (s32Ret != 0) {
-            printf("HB_VENC_GetRcParam failed.\n");
+            ROS_printf(0, "HB_VENC_GetRcParam failed.\n");
             return -1;
         }
         switch (m_oVencChnAttr.stRcAttr.enRcMode) {
@@ -552,14 +554,14 @@ int HobotVenc::Create(int width, int height, int bits)
         default:
             break;
         }
-        printf(" m_oVencChnAttr.stRcAttr.enRcMode = %d\n",
+        ROS_printf(2, " m_oVencChnAttr.stRcAttr.enRcMode = %d\n",
                 m_oVencChnAttr.stRcAttr.enRcMode);
     } else if (m_enPalType == PT_H265) {
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
         s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
         if (s32Ret != 0) {
-            printf("HB_VENC_GetRcParam failed.\n");
+            ROS_printf(0, "HB_VENC_GetRcParam failed.\n");
             return -1;
         }
         switch (m_oVencChnAttr.stRcAttr.enRcMode) {
@@ -580,24 +582,24 @@ int HobotVenc::Create(int width, int height, int bits)
         default:
             break;
         }
-        printf(" m_VencChnAttr.stRcAttr.enRcMode = %d\n",
+        ROS_printf(2, " m_VencChnAttr.stRcAttr.enRcMode = %d\n",
                 m_oVencChnAttr.stRcAttr.enRcMode);
     } else if (m_enPalType == PT_MJPEG) {
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_MJPEGFIXQP;
         s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
         if (s32Ret != 0) {
-            printf("HB_VENC_GetRcParam failed.\n");
+            ROS_printf(0, "HB_VENC_GetRcParam failed.\n");
             return -1;
         }
         venc_mjpgfixqp(pstRcParam, 30, 50);
     }
     s32Ret = HB_VENC_SetChnAttr(m_nCodecChn, &m_oVencChnAttr);  // config
     if (s32Ret != 0) {
-        printf("HB_VENC_SetChnAttr failed\n");
+        ROS_printf(0, "HB_VENC_SetChnAttr failed\n");
         return -1;
     }
-    printf("[%s]->sucess chn=%d,ret=%d.\n", __func__, m_nCodecChn, s32Ret);
+    ROS_printf(2, "[%s]->sucess chn=%d,ret=%d.\n", __func__, m_nCodecChn, s32Ret);
 
     return 0;
 }
@@ -791,7 +793,7 @@ int HobotVenc::venc_mjpgfixqp(VENC_RC_ATTR_S *pstRcParam, int framerate,
 {
     pstRcParam->stMjpegFixQp.u32FrameRate = framerate;
     pstRcParam->stMjpegFixQp.u32QualityFactort = quality;
-    printf("[%s]->fps=%d, quality=%d.\n", __func__, framerate, quality);
+    ROS_printf(2, "[%s]->fps=%d, quality=%d.\n", __func__, framerate, quality);
     return 0;
 }
 /*
@@ -811,7 +813,7 @@ int read_nv12file(hb_vio_buffer_t *vio_buf, char* picFile,
 
     img_in_fd = open(picFile, O_RDWR | O_CREAT, 0644);
     if (img_in_fd < 0) {
-        printf("open image:%s failed !\n", picFile);
+        ROS_printf("open image:%s failed !\n", picFile);
         return -1;
     }
 
@@ -834,16 +836,16 @@ int HobotVenc::prepare_user_buf_2lane(void *buf, uint32_t size_y, uint32_t size_
     ret  = ion_alloc_phy(size_y, &buffer->img_info.fd[0],
                         &buffer->img_addr.addr[0], &buffer->img_addr.paddr[0]);
     if (ret) {
-        printf("prepare user buf error\n");
+        ROS_printf("prepare user buf error\n");
         return ret;
     }
     ret = ion_alloc_phy(size_uv, &buffer->img_info.fd[1],
                         &buffer->img_addr.addr[1], &buffer->img_addr.paddr[1]);
     if (ret) {
-        printf("prepare user buf error\n");
+        ROS_printf("prepare user buf error\n");
         return ret;
     }
-    printf("buf:y: vaddr = 0x%x paddr = 0x%x; uv: vaddr = 0x%x, paddr = 0x%x\n",
+    ROS_printf("buf:y: vaddr = 0x%x paddr = 0x%x; uv: vaddr = 0x%x, paddr = 0x%x\n",
                 buffer->img_addr.addr[0], buffer->img_addr.paddr[0],
                 buffer->img_addr.addr[1], buffer->img_addr.paddr[1]);
     */

@@ -52,6 +52,8 @@ typedef struct _tag_FrameData {
   struct timespec time_stamp;
 } TFrameData;
 
+extern "C" int ROS_printf(int nLevel, char *fmt, ...);
+
 #define MMZ_CNT 5
 class HWCodec {
  public:

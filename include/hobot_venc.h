@@ -45,7 +45,7 @@ class HobotVenc : public HWCodec {
 
   std::shared_ptr<std::thread> m_spThrdInit;
   // std::atomic<bool> stop_;
-  void exec_init();
+  int exec_init();
 
   // VENC_CHN m_oVeChn;
   int VencChnAttrInit(VENC_CHN_ATTR_S *pVencChnAttr, PAYLOAD_TYPE_E p_enType,

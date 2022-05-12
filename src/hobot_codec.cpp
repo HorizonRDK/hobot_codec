@@ -258,16 +258,32 @@ int HobotCodec::init()
 }
 
 #ifdef THRD_CODEC_PUT
+// static struct timespec timePut_last = {0, 0};
+// static uint64_t s_sLastPut = 0;
 void HobotCodec::exec_loopPut() {
   // 获取sub 到的数据，FIFO ，put 到 codec 里面
 #ifdef THRD_CODEC_PUT
   while (!stop_) {
-    TRecvImg* pData = m_arrRecvImg.dequeue();
+    TRecvImg* pData = m_arrRecvImg.dequeue_val();  // dequeue();
     if (pData && pData->mDataLen > 0) {
       if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(pData->mWidth, pData->mHeight)) {
         struct timespec time_now = {0, 0}, time_end = {0, 0};
         clock_gettime(CLOCK_REALTIME, &time_now);
         uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+        /*
+        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->pData=0x%x, len=%d, stamp=%d.%d, laps=%d",
+          __func__, pData, pData->mDataLen,pData->time_stamp.tv_sec,pData->time_stamp.tv_nsec, mNow - s_sLastPut);
+        s_sLastPut = mNow;
+        if (timePut_last.tv_nsec == pData->time_stamp.tv_nsec && timePut_last.tv_sec == pData->time_stamp.tv_sec ) {
+          std::stringstream ss;
+          ss << "#####->exec_loopPut same stamp to abort: " << pData->encoding
+          << ", stamp: " << pData->time_stamp.tv_sec
+          << "." << pData->time_stamp.tv_nsec;
+          RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
+          abort();
+        }
+        timePut_last = pData->time_stamp;*/
+
         if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
           int nYuvLen = pData->mWidth * pData->mHeight * 3 / 2;
           if (nullptr == mPtrInNv12)
@@ -281,6 +297,7 @@ void HobotCodec::exec_loopPut() {
         } else {
           m_pHwCodec->PutData(pData->mPImgData, pData->mDataLen, pData->time_stamp);
         }
+        m_arrRecvImg.dequeue();
         clock_gettime(CLOCK_REALTIME, &time_end);
         RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,w:h=%d:%d,tmlaps %d ms,dLen=%d,laps %d.\n",
          __func__, pData->encoding, pData->mWidth, pData->mHeight,
@@ -325,7 +342,8 @@ void HobotCodec::exec_loopPub() {
     } else {
       timer_ros_pub();
     }
-    usleep(period_ms*1000);
+    usleep(10000);
+    // usleep(period_ms*1000);
   }
 }
 
@@ -350,6 +368,7 @@ void DeepInitItem(void *pItem, void *pSrcItem)
   }
 }
 
+#ifdef THRD_CODEC_PUT
 void HobotCodec::put_rosimg_frame(const sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
   TRecvImg oTmp = { 0 };
@@ -363,8 +382,8 @@ void HobotCodec::put_rosimg_frame(const sensor_msgs::msg::Image::ConstSharedPtr 
   snprintf(oTmp.encoding, sizeof(oTmp.encoding), "%s", msg->encoding.data());
   oTmp.time_stamp = time_in;
   m_arrRecvImg.enqueue(oTmp, DeepInitItem);
-  // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d.\n",
-  // __func__, msg->width, msg->height, msg->data.size());
+  // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d,stamp=%d.%d.\n",
+  //  __func__, msg->width, msg->height, msg->data.size(), time_in.tv_sec, time_in.tv_nsec);
 }
 void HobotCodec::put_rosh26x_frame(const img_msgs::msg::H26XFrame::ConstSharedPtr msg)
 {
@@ -382,8 +401,9 @@ void HobotCodec::put_rosh26x_frame(const img_msgs::msg::H26XFrame::ConstSharedPt
   // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->w:h=%d:%d,sz=%d.\n",
   // __func__, msg->width, msg->height, msg->data.size());
 }
-
+#endif
 #ifdef SHARED_MEM_MSG
+#ifdef THRD_CODEC_PUT
 void HobotCodec::put_hbm_frame(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg)
 {
   TRecvImg oTmp = { 0 };
@@ -415,7 +435,7 @@ void HobotCodec::put_hbmh264_frame(const hbm_img_msgs::msg::HbmH26XFrame::ConstS
   oTmp.time_stamp = time_in;
   m_arrRecvImg.enqueue(oTmp, DeepInitItem);
 }
-
+#endif
 void HobotCodec::in_hbmemh264_topic_cb(
     const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg) {
   struct timespec time_now = {0, 0}, time_end = {0, 0}, time_in = {0, 0};
@@ -568,15 +588,16 @@ void HobotCodec::in_ros_topic_cb(
       m_pHwCodec->PutData(msg->data.data(), msg->data.size(), time_in);
     }
     clock_gettime(CLOCK_REALTIME, &time_end);
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,w:h=%d:%d,tmlaps %d ms,dLen=%d,laps %d.\n", __func__,
-      msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now), msg->data.size(),
-      (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
+    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fmt=%s ,w:h=%d:%d,tm=laps %d ms,dLen=%d,laps %d.\n",
+      __func__, msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now),
+      msg->data.size(), (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
   }
 #endif
 
   return;
 }
 
+#ifdef THRD_CODEC_PUT
 void HobotCodec::put_compressedimg_frame(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg)
 {
   TRecvImg oTmp = { 0 };
@@ -592,6 +613,8 @@ void HobotCodec::put_compressedimg_frame(const sensor_msgs::msg::CompressedImage
   m_arrRecvImg.enqueue(oTmp, DeepInitItem);
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->%s sz=%d.\n", __func__, oTmp.encoding, msg->data.size());
 }
+#endif
+
 void HobotCodec::in_ros_compressed_cb(
   const sensor_msgs::msg::CompressedImage::ConstSharedPtr img_msg) {
   struct timespec time_now = {0, 0}, time_in = {0, 0};
@@ -617,7 +640,7 @@ void HobotCodec::in_ros_compressed_cb(
   }
 #endif
 }
-
+// static struct timespec time_last;
 // codec dec 和 enc 是不一样的接口？
 void HobotCodec::timer_ros_pub()
 {
@@ -647,6 +670,15 @@ void HobotCodec::timer_ros_pub()
         img_pub_->height = oFrame.mHeight;
         img_pub_->step = oFrame.mWidth;
         img_pub_->encoding = out_format_.c_str();
+        /*if (time_last.tv_nsec == oFrame.time_stamp.tv_nsec && time_last.tv_sec == oFrame.time_stamp.tv_sec ) {          
+          std::stringstream ss;
+          ss << "timer_ros_pub same-stamp img abort: " << img_pub_->encoding
+          << ", stamp: " << img_pub_->header.stamp.sec
+          << "." << img_pub_->header.stamp.nanosec;
+          RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
+          abort();
+        }
+        time_last = oFrame.time_stamp;*/
         if (HB_PIXEL_FORMAT_NV12 == oFrame.mFrameFmt) {
           if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
             int nRgbLen = oFrame.mHeight * oFrame.mWidth * 3;

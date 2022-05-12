@@ -186,7 +186,7 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         // 先来获取编码
         // m_MtxLstFrames.lock();
         uint32_t tmNow = video_utils::GetTickCount();
-        int tmSleep = 0;
+        /*int tmSleep = 0;
         if (0 == m_tmLastPush) {
             m_tmLastPush = tmNow;
         } else {
@@ -197,7 +197,7 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
             ROS_printf(2, "[PutData]->chn=%d,w:h=%d:%d,len=%d, use=%d-get=%d,last=%d,now=%d sleep %d ms,begin\n",
                 m_nCodecChn, m_nPicWidth, m_nPicHeight, nLen, m_nUseCnt, m_nGetCnt, m_tmLastPush, tmNow, tmSleep);
         }
-        m_tmLastPush = tmNow;
+        m_tmLastPush = tmNow;*/
         VIDEO_FRAME_S pstFrame = { 0 };  // 至关重要，有些变量要初始赋值为 0(false)
         int offset = m_nPicWidth * m_nPicHeight;
         m_nMMZidx = m_nUseCnt % m_nMMZCnt;
@@ -217,17 +217,20 @@ int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
         pstFrame.stVFrame.pts = tmNow;
         m_nUseCnt++;  // wuwlNG
         s32Ret = HB_VENC_SendFrame(m_nCodecChn, &pstFrame, 3000);
-        uint32_t tmNowWrite = video_utils::GetTickCount();
-        /*if (0 == s_enctest) {
+        /*uint32_t tmNowWrite = video_utils::GetTickCount();
+        if (0 == s_enctest) {
             char fileName[128] = { 0 };
             snprintf(fileName, sizeof(fileName), "enc-put-%d.nv12", 0);  // m_nUseCnt);
             FILE *outFile = fopen(fileName, "wb");
             fwrite(pDataIn, nLen, 1, outFile);
             fclose(outFile);
-        }*/
-        ROS_printf(2, "[HB_VENC_SendFrame]->chn=%d,w:h=%d:%d,len=%d,idx=%d, use=%d,ret=%d ,write=%d ms end.\n",
+        }
+        ROS_printf(2, "[HB_VENC_SendFrame]->chn=%d,w:h=%d:%d,len=%d,idx=%d, use=%d,ret=%d ,write=%d ms.\n",
             m_nCodecChn, m_nPicWidth, m_nPicHeight, nLen, m_nMMZidx, m_nUseCnt, s32Ret,
-            video_utils::GetTickCount() - tmNowWrite);
+            time_stamp.tv_sec, time_stamp.tv_nsec, video_utils::GetTickCount() - tmNowWrite);*/
+        ROS_printf(2, "[HB_VENC_SendFrame]->chn=%d,w:h=%d:%d,len=%d,idx=%d, use=%d:%d ms,ret=%d tm=%d.%d.\n",
+            m_nCodecChn, m_nPicWidth, m_nPicHeight, nLen, m_nMMZidx, m_nUseCnt,
+            video_utils::GetTickCount() - tmNow, s32Ret, time_stamp.tv_sec, time_stamp.tv_nsec);
         if (s32Ret != 0) {
             return -1;
         }
@@ -261,14 +264,16 @@ int HobotVenc::GetFrame(TFrameData *pOutFrm) {
     if (enCT_START == m_nCodecSt) {
         // VIDEO_STREAM_S pstStream;
         do {
+            if (-1 == HWCodec::GetFrame(pOutFrm))
+                return -1;
             s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 3000);  // m_curGetStream
-            ROS_printf(2, "[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d\n",
-                m_nCodecChn, m_nPicWidth, m_nPicHeight, m_nGetCnt, m_curGetStream.pstPack.size, s32Ret);
+            ROS_printf(2, "[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d,tm=%d.%d\n",
+                m_nCodecChn, m_nPicWidth, m_nPicHeight, m_nGetCnt, m_curGetStream.pstPack.size,
+                s32Ret, pOutFrm->time_stamp.tv_sec, pOutFrm->time_stamp.tv_nsec);
             if (s32Ret != 0) {
                 usleep(10000);
                 return -1;
             }
-            HWCodec::GetFrame(pOutFrm);
             pOutFrm->mPtrData = reinterpret_cast<uint8_t*>(m_curGetStream.pstPack.vir_ptr);
             pOutFrm->mDataLen = m_curGetStream.pstPack.size;
             pOutFrm->mWidth = m_nPicWidth;

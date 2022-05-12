@@ -27,6 +27,7 @@ class CArrayQueue {
   }
   void enqueue(T item, fnDeepInitItem fnInit);
   T* dequeue();
+  T* dequeue_val();
   bool isFull() {
     return first == 0 && last == size-1 || first == last + 1;
   }
@@ -58,13 +59,25 @@ void CArrayQueue<T, size>::enqueue(T el, fnDeepInitItem fnInit) {
       // storage[++last] = el;
       nCurItem = ++last;
     }
+    // printf("[enqueue]->cur=%d,first=%d,last=%d,obj=0x%x.\n", nCurItem, first, last, &storage[nCurItem]);
     if (fnInit)
       fnInit(&storage[nCurItem], &el);
   }
   // else cout << "Full queue.\n";
   m_MtxArr.unlock();
 }
-// Please do check "!ifEmpty()" before invoke this API, else a SIGSEGV error will happen.
+template<class T, int size>
+T* CArrayQueue<T, size>::dequeue_val() {
+  T *tmp = nullptr;
+  m_MtxArr.lock();
+  if (!isEmpty()) {
+    tmp = &storage[first];
+  }
+  m_MtxArr.unlock();
+  // printf("[dequeue-val]->first=%d,last=%d,obj=0x%x.\n", first, last, tmp);
+  return tmp;
+}
+
 template<class T, int size>
 T* CArrayQueue<T, size>::dequeue() {
   T *tmp = nullptr;
@@ -79,7 +92,7 @@ T* CArrayQueue<T, size>::dequeue() {
       first++;
   }
   m_MtxArr.unlock();
-  // printf("[dequeue]->first=%d,last=%d.\n", first, last);
+  // printf("[dequeue]->first=%d,last=%d,obj=0x%x.\n", first, last, tmp);
   return tmp;
 }
 

@@ -39,7 +39,7 @@ typedef struct _tag_RecvImg {
   struct timespec time_stamp;
 }TRecvImg;
 #define FIFO_NUM 20
-#define THRD_CODEC_PUT
+// #define THRD_CODEC_PUT
 
 using rclcpp::NodeOptions;
 using ImgCbType =
@@ -131,6 +131,7 @@ class HobotCodec : public rclcpp::Node {
   HWCodec *m_pHwCodec = nullptr;
   uint8_t *mPtrInNv12 = nullptr;
   uint8_t *mPtrOutRGB2 = nullptr;
+#ifdef THRD_CODEC_PUT
   // tool
   void put_compressedimg_frame(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
   void put_rosimg_frame(const sensor_msgs::msg::Image::ConstSharedPtr msg);
@@ -139,6 +140,7 @@ class HobotCodec : public rclcpp::Node {
 #ifdef SHARED_MEM_MSG
   void put_hbm_frame(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
   void put_hbmh264_frame(const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg);
+#endif
 #endif
 };
 

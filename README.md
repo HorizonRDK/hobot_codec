@@ -38,26 +38,17 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 ## 编译
 
-支持在X3 Ubuntu系统上编译和在PC上使用docker交叉编译两种方式，并支持通过编译选项控制编译pkg的依赖和pkg的功能。
-### 编译选项
+支持在X3 Ubuntu系统上编译和在PC上使用docker交叉编译两种方式。
 
-SHARED_MEM
-
-- shared mem（共享内存传输）使能开关，默认关闭（OFF），编译时使用-DSHARED_MEM=ON命令打开。
-- 如果打开，编译和运行会依赖hbm_img_msgs pkg，并且需要使用tros进行编译。
-- 如果关闭，编译和运行不依赖hbm_img_msgs pkg，支持使用原生ros和tros进行编译。
-- CMakeLists.txt中指定 hobot_codec package的安装路径，默认为`../install/hobot_codec`。
-
-### X3 Ubuntu系统上编译
+### X3 Ubuntu系统板端编译
 1、编译环境确认
 
-- 当前编译终端已设置ROS环境变量：`source /opt/ros/foxy/setup.bash`。
-- 已安装ROS2编译工具colcon。安装的ROS不包含编译工具colcon，需要手动安装colcon。colcon安装命令：`apt update; apt install python3-colcon-common-extensions`
-- 已依赖pkg ，详见 Dependency 部分
+ - 板端已安装X3 Ubuntu系统。
+ - 当前编译终端已设置TogetherROS环境变量：`source PATH/setup.bash`。其中PATH为TogetherROS的安装路径。
+ - 已安装ROS2编译工具colcon，安装命令：`pip install -U colcon-common-extensions`
 
 2、编译：
-  - 支持 share mem 方式订阅发布的图片：`colcon build --packages-select hobot_codec --cmake-args -DSHARED_MEM=ON`
-  - 支持订阅ROS2标准格式图片：`colcon build --packages-select hobot_codec`或`colcon build --packages-select hobot_codec --cmake-args -DSHARED_MEM=OFF`。
+  - `colcon build --packages-select hobot_codec`
 
 ### docker交叉编译
 
@@ -80,8 +71,7 @@ SHARED_MEM
      --cmake-force-configure \
      --cmake-args \
      --no-warn-unused-cli \
-     -DCMAKE_TOOLCHAIN_FILE=`pwd`/robot_dev_config/aarch64_toolchainfile.cmake \
-     -DSHARED_MEM=ON
+     -DCMAKE_TOOLCHAIN_FILE=`pwd`/robot_dev_config/aarch64_toolchainfile.cmake
   ```
 - 其中SYS_ROOT为交叉编译系统依赖路径，此路径具体地址详见第1步“编译环境确认”的交叉编译说明。
 
@@ -97,17 +87,17 @@ ros2 run hobot_codec hobot_codec_republish
 ```
 ### 目前参数列表：
 
-参数名 | 含义 | 取值 | 默认值
----|---|---|---
-channel     | 处理通道号          | 0-3                            | 0
-in_mode     | 接入数据传输的方式   | ros/shared_mem                 | ros
-out_mode    | 发出数据传输方式     | ros/shared_mem                 | ros
-in_format   | 订阅的数据格式       | bgr8/rgb8/nv12/jpeg/h264/h265  | bgr8
-out_format  | 处理后发布的数据格式 | bgr8/rgb8/nv12/jpeg/h264/h265   |jpeg
-sub_topic   | 订阅的话题名字       | 任意字符串                      | /image_raw
-pub_topic   | 发布的话题名字       | 任意字符串                      | /image_raw/compressed
-enc_qp      | 264/265编码质量     | 浮点数 0-100                    | 10.0
-jpg_quality | jpeg 编码质量       | 浮点数 0-100                    | 60.0
+| 参数名      | 含义                 | 取值                          | 默认值                |
+| ----------- | -------------------- | ----------------------------- | --------------------- |
+| channel     | 处理通道号           | 0-3                           | 0                     |
+| in_mode     | 接入数据传输的方式   | ros/shared_mem                | ros                   |
+| out_mode    | 发出数据传输方式     | ros/shared_mem                | ros                   |
+| in_format   | 订阅的数据格式       | bgr8/rgb8/nv12/jpeg/h264/h265 | bgr8                  |
+| out_format  | 处理后发布的数据格式 | bgr8/rgb8/nv12/jpeg/h264/h265 | jpeg                  |
+| sub_topic   | 订阅的话题名字       | 任意字符串                    | /image_raw            |
+| pub_topic   | 发布的话题名字       | 任意字符串                    | /image_raw/compressed |
+| enc_qp      | 264/265编码质量      | 浮点数 0-100                  | 10.0                  |
+| jpg_quality | jpeg 编码质量        | 浮点数 0-100                  | 60.0                  |
 
 ### 注意：
 

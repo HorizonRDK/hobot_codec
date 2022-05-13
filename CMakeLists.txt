@@ -15,13 +15,15 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-OPTION(SHARED_MEM    "SHARED_MEM work environment"    OFF)
-
-if(SHARED_MEM)
-add_definitions(-DUSING_HBMEM)
-find_package(hbm_img_msgs REQUIRED)
-add_definitions(-DSHARED_MEM_MSG)
-endif()
+# BUILD_HBMEM is set in aarch64_toolchainfile.cmake
+if (${BUILD_HBMEM})
+  message("using shared mem")
+  add_definitions(-DUSING_HBMEM)
+  find_package(hbm_img_msgs REQUIRED)
+  add_definitions(-DSHARED_MEM_MSG)
+else()
+  message("not using shared mem")
+endif ()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
@@ -57,7 +59,7 @@ target_link_libraries(hobot_codec_republish
   ${BASE_LIBRARIES} ${X3_HAPI_LIB}
 )
 
-if(SHARED_MEM)
+if (${BUILD_HBMEM})
 target_link_libraries(hobot_codec_republish
   hbmem alog
 )

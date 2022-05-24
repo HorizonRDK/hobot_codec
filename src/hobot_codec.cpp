@@ -444,6 +444,11 @@ void HobotCodec::in_hbmemh264_topic_cb(
   time_in.tv_sec = msg->dts.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
 
+  if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
+      __func__, in_format_.c_str(), msg->encoding.data());
+    return;
+  }
   std::stringstream ss;
   ss << "in_hbmemh264_topic_cb img: " << msg->encoding.data()
   << ", stamp: " << msg->dts.sec
@@ -475,6 +480,11 @@ void HobotCodec::in_hbmem_topic_cb(
   << "." << msg->time_stamp.nanosec;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "%s", ss.str().c_str());
 
+  if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
+      __func__, in_format_.c_str(), msg->encoding.data());
+    return;
+  }
 #ifdef THRD_CODEC_PUT
   put_hbm_frame(msg);
   /*TRecvImg oTmp = { 0 };
@@ -519,6 +529,12 @@ void HobotCodec::in_ros_h26x_topic_cb(
   time_in.tv_nsec = msg->dts.nanosec;
   time_in.tv_sec = msg->dts.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+
+  if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
+      __func__, in_format_.c_str(), msg->encoding.data());
+    return;
+  }
   {
     auto tp_raw_now = std::chrono::system_clock::now();
     std::unique_lock<std::mutex> lk(frame_statraw_mtx_);
@@ -556,6 +572,11 @@ void HobotCodec::in_ros_topic_cb(
   time_in.tv_sec = msg->header.stamp.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
 
+  if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
+      __func__, in_format_.c_str(), msg->encoding.data());
+    return;
+  }
   {
     auto tp_raw_now = std::chrono::system_clock::now();
     std::unique_lock<std::mutex> lk(frame_statraw_mtx_);

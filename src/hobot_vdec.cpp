@@ -6,7 +6,7 @@
 #include "include/hobot_vdec.h"
 // H264 H265 MJPEG
 
-HobotVdec::HobotVdec(int channel, const char *type) : HWCodec(channel, type)
+HobotVdec::HobotVdec(int channel, const char *type) : HWCodec(channel, type), m_bFirstDec(1)
 {
 }
 HobotVdec::~HobotVdec()
@@ -186,6 +186,7 @@ int HobotVdec::child_start(int nPicWidth, int nPicHeight) {
         ROS_printf(0, "HB_VDEC_Module_Init: %d\n", s32Ret);
     }
     init_vdec();
+    m_bFirstDec = 1;
     m_nCodecSt = enCT_START;
     ROS_printf(2, "HB_VDEC_Module_Init: %d end.\n", s32Ret);
     return 0;
@@ -302,7 +303,7 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
         // h26X 前几帧没有 I 帧，解码失败是正常的，只要不崩溃就可以
-        if (m_enPalType != PT_JPEG) {
+        if (m_enPalType != PT_JPEG && m_bFirstDec) {
             // 检查是否是I 帧
             unsigned char *pszSPS = NULL, *pszPPS = NULL, *pszVPS = NULL;
             int nSPSPos = 0, nPPSPos = 0, nVPSPos = 0;
@@ -312,6 +313,7 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
             if (nSPSLen <= 0) {
                 return -1;
             }
+            m_bFirstDec = 0;
         }
         VIDEO_FRAME_S pstFrame;
         VIDEO_STREAM_S pstStream;
@@ -371,7 +373,7 @@ int HobotVdec::ReleaseFrame(TFrameData *pFrame)
 static int s_test = 0;
 int HobotVdec::GetFrame(TFrameData *pOutFrm) {
     int s32Ret;
-    if (enCT_START == m_nCodecSt) {
+    if (enCT_START == m_nCodecSt && 0 == m_bFirstDec) {
         // VIDEO_FRAME_S curFrameInfo;
         int idx = 0;
         struct timeval now;

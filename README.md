@@ -94,7 +94,7 @@ ros2 run hobot_codec hobot_codec_republish
 | out_mode    | 发出数据传输方式     | ros/shared_mem                | ros                   |
 | in_format   | 订阅的数据格式       | bgr8/rgb8/nv12/jpeg/h264/h265 | bgr8                  |
 | out_format  | 处理后发布的数据格式 | bgr8/rgb8/nv12/jpeg/h264/h265 | jpeg                  |
-| sub_topic   | 订阅的话题名字       | 任意字符串                    | /image_raw            |
+| sub_topic   | 订阅的话题名字       | 任意字符串，但必须是别的node 发布的topic   | /image_raw            |
 | pub_topic   | 发布的话题名字       | 任意字符串                    | /image_raw/compressed |
 | enc_qp      | 264/265编码质量      | 浮点数 0-100                  | 10.0                  |
 | jpg_quality | jpeg 编码质量        | 浮点数 0-100                  | 60.0                  |

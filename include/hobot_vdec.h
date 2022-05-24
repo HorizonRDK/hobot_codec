@@ -29,6 +29,7 @@ class HobotVdec : public HWCodec {
   int build_dec_seq_header(uint8_t * pbHeader, int* sizelength, uint8_t* pbMetaData, int nMetaDLen);
   VDEC_CHN_ATTR_S m_oVdecChnAttr;
   VIDEO_FRAME_S m_curFrameInfo;
+  int m_bFirstDec;   // 是否解码第一帧
 };
 
 #endif  // INCLUDE_HOBOT_VDEC_H_

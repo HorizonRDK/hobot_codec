@@ -147,3 +147,22 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=
 #/userdata/install/lib/hobot_codec/hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
 
 ```
+
+
+## 高级使用范例：
+
+串联（前一个结点 hobot_codec_republish 为 编码，后面一个 hobot_codec_republish sub 前一个codec 节点的 pub 数据进行解码）测试编解码：
+```
+export ROS_DOMAIN_ID=***
+# 配置 ROS_DOMAIN_ID，避免多机干扰，每一个 terminal 都需要执行，才可以进行 sub 到数据
+
+ros2 run mipi_cam mipi_cam --ros-args --log-level info --ros-args -p out_format:=nv12 -p io_method:=shared_mem -p image_width:=640 -p image_height:=480
+# 运行mipi cam，通过shared mem 方式发布nv12格式图片
+
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p pub_topic:=/image_h265
+# 运行codec，订阅nv12格式图片，编码并发布h265格式视频，话题：image_h265，方式 shared_mem
+
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_h265 -p pub_topic:=/image_nv12
+# 运行codec，订阅h265格式视频（通过shared_mem方式，话题必须是：image_h265），解码并发布nv12格式图片
+
+```

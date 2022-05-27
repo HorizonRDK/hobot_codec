@@ -16,6 +16,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "include/video_utils.hpp"
 
+#define PUB_QUEUE_NUM 5
 extern "C" int ROS_printf(int nLevel, char *fmt, ...)
 {
   char buf[512] = { 0 };
@@ -75,6 +76,7 @@ const char* raw_types[] = {
 int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
 {
   for (int nIdx = 0; nIdx < nArrLen; ++nIdx) {
+    printf("[IsType]->in %s - %d, %s - %d.\n", tsType, strlen(tsType), fmtTypes[nIdx], strlen(fmtTypes[nIdx]));
     if (0 == strcmp(tsType, fmtTypes[nIdx]))
       return 1;
   }
@@ -152,7 +154,8 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
   get_params();
 
   RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
-   "Args: %s %s %s %s", in_mode_.c_str(), out_mode_.c_str(), in_format_.c_str(), out_format_.c_str());
+   "[In]->args: im=%s om=%s if=%s of=%s", in_mode_.c_str(), out_mode_.c_str(),
+   in_format_.c_str(), out_format_.c_str());
   init();
 }
 
@@ -183,32 +186,37 @@ int HobotCodec::init()
   if (0 != out_format_.compare(in_format_)) {
     if (IsType(out_format_.c_str(), enc_types, 3)) {
       m_pHwCodec = new HobotVenc(mChannel_, out_format_.c_str());
+      RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
+        "Create encodec with fmt: %s", out_format_.c_str());
+      m_pHwCodec->SetCodecAttr("jpg_quality", jpg_quality_);
+      m_pHwCodec->SetCodecAttr("enc_qp", enc_qp_);
     } else {
       m_pHwCodec = new HobotVdec(mChannel_, in_format_.c_str());
+      RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
+        "Create decodec with fmt: %s", in_format_.c_str());
     }
     m_pHwCodec->InitCodec();
-    m_pHwCodec->SetCodecAttr("jpg_quality", jpg_quality_);
-    m_pHwCodec->SetCodecAttr("enc_qp", enc_qp_);
   }
   // 启动编解码器，成功则启动pub，帧率是一个问题，按最快速度执行
   // step1: create subscribe
-  if (in_mode_.find("shared_mem") == std::string::npos) {
+  // if (in_mode_.find("shared_mem") == std::string::npos) {
+  if (in_mode_.compare("shared_mem") != 0) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
       "Create subscription with topic_name: %s", in_sub_topic_.c_str());
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
       ros_subscrip_h26x_ = this->create_subscription<img_msgs::msg::H26XFrame>(
-            in_sub_topic_, 10,
+            in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodec::in_ros_h26x_topic_cb, this, std::placeholders::_1));
     } else {
       if (in_sub_topic_.compare(topic_name_compressed_) != 0) {
         ros_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            in_sub_topic_, 10,
+            in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodec::in_ros_topic_cb, this, std::placeholders::_1));
       } else {
         ros_subscription_compressed_ =
             this->create_subscription<sensor_msgs::msg::CompressedImage>(
-            in_sub_topic_, 10,
+            in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodec::in_ros_compressed_cb, this,
                       std::placeholders::_1));
       }
@@ -218,11 +226,11 @@ int HobotCodec::init()
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
       hbmemH26x_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
-        in_sub_topic_, 10,
+        in_sub_topic_, PUB_QUEUE_NUM,
         std::bind(&HobotCodec::in_hbmemh264_topic_cb, this, std::placeholders::_1));
     } else {
       hbmem_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
-        in_sub_topic_, 10,
+        in_sub_topic_, PUB_QUEUE_NUM,
         std::bind(&HobotCodec::in_hbmem_topic_cb, this, std::placeholders::_1));
     }
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
@@ -232,6 +240,8 @@ int HobotCodec::init()
   }
   // step1: create publish
   const int period_ms = 1000.0 / framerate_;
+  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
+    "[%s]->Create sub_cb with mode: %s, find=%d", __func__, in_mode_.c_str(), in_mode_.find("shared_mem"));
 
 // #ifdef USE_THREAD
   m_spThrdPub = std::make_shared<std::thread>(std::bind(&HobotCodec::exec_loopPub, this));
@@ -240,7 +250,7 @@ int HobotCodec::init()
 #endif
 /*#else
   if (out_mode_.compare("shared_mem") != 0) {
-    ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), 10);
+    ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), PUB_QUEUE_NUM);
 
     RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[ros]->pub 0x%x, topic=%s.\n",
       ros_image_publisher_, out_pub_topic_.c_str());
@@ -249,7 +259,7 @@ int HobotCodec::init()
   } else {
 #ifdef SHARED_MEM_MSG
     hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
-        out_pub_topic_.c_str(), 10);
+        out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     timer_pub_ = this->create_wall_timer(std::chrono::milliseconds(static_cast<int64_t>(period_ms)),
       std::bind(&HobotCodec::timer_hbmem_pub, this));
 #endif
@@ -318,18 +328,21 @@ void HobotCodec::exec_loopPub() {
   if (out_mode_.compare("shared_mem") != 0) {
     if (0 == out_format_.compare("h264") ||
       0 == out_format_.compare("h265") ) {
-      ros_h26ximage_publisher_ = this->create_publisher<img_msgs::msg::H26XFrame>(out_pub_topic_.c_str(), 10);
+      ros_h26ximage_publisher_ = this->create_publisher<img_msgs::msg::H26XFrame>(
+        out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     } else {
-      ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), 10);
+      ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     }
   } else {
     bHobot = true;
 #ifdef SHARED_MEM_MSG
     if (0 == out_format_.compare("h264") ||
       0 == out_format_.compare("h265") ) {
-      h264hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(out_pub_topic_.c_str(), 10);
+      h264hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
+        out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     } else {
-      hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(out_pub_topic_.c_str(), 10);
+      hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
+        out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     }
 #endif
   }
@@ -759,6 +772,8 @@ void HobotCodec::timer_hbmem_pub()
           msg.pts.sec = oFrame.time_stamp.tv_sec;
           msg.pts.nanosec = oFrame.time_stamp.tv_nsec;
           msg.data_size = oFrame.mDataLen;
+          msg.height = oFrame.mHeight;
+          msg.width = oFrame.mWidth;
           memcpy(msg.encoding.data(), out_format_.c_str(), out_format_.length());
           memcpy(msg.data.data(), oFrame.mPtrData, oFrame.mDataLen);
           msg.index = mSendIdx++;

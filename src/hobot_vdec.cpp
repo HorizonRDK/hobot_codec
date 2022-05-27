@@ -245,14 +245,19 @@ int findH26xNalu(const unsigned char* p_pszData, int p_nDataLen, unsigned char* 
 int findSPSPPSVPS(int p_nStreamType, const unsigned char* p_pszFrameData, int p_nDataLen, int* p_pnSPS,
     int* p_pnPPS, int* p_pnVPS, int* p_pnSPSLen, int* p_pnPPSLen, int* p_pnVPSLen, int p_nStartCodeLen)
 {
-    int nNaluLen[4] = { 0 };  // 包含开始码长度
-    int nStartCodePos[4] = { 0 };
-    unsigned char nNaluType[4] = { 0 };
+    int nNaluLen[6] = { 0 };  // 包含开始码长度 , 4
+    int nStartCodePos[6] = { 0 };
+    unsigned char nNaluType[6] = { 0 };
     int nNaluNum = 0;
     const unsigned char *pCheckMem = p_pszFrameData;
     int nLeftData = p_nDataLen;
     int nNalLen = 0;
     do {
+        if (nNaluNum > 5) {
+            ROS_printf(0, "[findSPSPPSVPS]->nalNum=%d - err data.\n",
+               nNaluNum);
+            return -1;
+        }
         nNalLen = findH26xNalu(pCheckMem, nLeftData,
             &nNaluType[nNaluNum], &nNaluLen[nNaluNum]);
         if (nNalLen < 0) {
@@ -261,8 +266,8 @@ int findSPSPPSVPS(int p_nStreamType, const unsigned char* p_pszFrameData, int p_
         nStartCodePos[nNaluNum] = (pCheckMem - p_pszFrameData);
         pCheckMem += nNaluLen[nNaluNum];
         nLeftData -= nNaluLen[nNaluNum];
-        // ROS_printf("[findSPSPPSVPS]->type=%d,naLen=%d,start=%d.\n",
-        //   nNaluType[nNaluNum],nNaluLen[nNaluNum],nStartCodePos[nNaluNum]);
+        // ROS_printf(2, "[findSPSPPSVPS]->type=%d,naLen=%d,start=%d, nalNum=%d.\n",
+        //   nNaluType[nNaluNum],nNaluLen[nNaluNum],nStartCodePos[nNaluNum], nNaluNum);
         ++nNaluNum;
     } while (1);
     // 根据nNaluType来输出
@@ -308,6 +313,13 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
             unsigned char *pszSPS = NULL, *pszPPS = NULL, *pszVPS = NULL;
             int nSPSPos = 0, nPPSPos = 0, nVPSPos = 0;
             int nSPSLen = 0, nPPSLen = 0, nVPSLen = 0;
+            /*static int s_sTest = 0;
+            if (0 == s_sTest) {
+                FILE *outFile = fopen("1.h26x", "wb");
+                fwrite(pDataIn, nLen, 1, outFile);
+                fclose(outFile);
+                s_sTest = 1;
+            }*/
             int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
                 nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
             if (nSPSLen <= 0) {
@@ -370,7 +382,7 @@ int HobotVdec::ReleaseFrame(TFrameData *pFrame)
     }
     return 0;
 }
-static int s_test = 0;
+static int s_test = 1;
 int HobotVdec::GetFrame(TFrameData *pOutFrm) {
     int s32Ret;
     if (enCT_START == m_nCodecSt && 0 == m_bFirstDec) {

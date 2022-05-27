@@ -186,7 +186,11 @@ int HobotVdec::child_start(int nPicWidth, int nPicHeight) {
         ROS_printf(0, "HB_VDEC_Module_Init: %d\n", s32Ret);
     }
     init_vdec();
-    m_bFirstDec = 1;
+    if (m_enPalType != PT_JPEG) {
+        m_bFirstDec = 1;
+    } else {
+        m_bFirstDec = 0;
+    }
     m_nCodecSt = enCT_START;
     ROS_printf(2, "HB_VDEC_Module_Init: %d end.\n", s32Ret);
     return 0;
@@ -308,24 +312,26 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
         // h26X 前几帧没有 I 帧，解码失败是正常的，只要不崩溃就可以
-        if (m_enPalType != PT_JPEG && m_bFirstDec) {
-            // 检查是否是I 帧
-            unsigned char *pszSPS = NULL, *pszPPS = NULL, *pszVPS = NULL;
-            int nSPSPos = 0, nPPSPos = 0, nVPSPos = 0;
-            int nSPSLen = 0, nPPSLen = 0, nVPSLen = 0;
-            /*static int s_sTest = 0;
-            if (0 == s_sTest) {
-                FILE *outFile = fopen("1.h26x", "wb");
-                fwrite(pDataIn, nLen, 1, outFile);
-                fclose(outFile);
-                s_sTest = 1;
-            }*/
-            int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
-                nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
-            if (nSPSLen <= 0) {
-                return -1;
+        if (m_enPalType != PT_JPEG) {
+            if (m_bFirstDec) {
+                // 检查是否是I 帧
+                unsigned char *pszSPS = NULL, *pszPPS = NULL, *pszVPS = NULL;
+                int nSPSPos = 0, nPPSPos = 0, nVPSPos = 0;
+                int nSPSLen = 0, nPPSLen = 0, nVPSLen = 0;
+                /*static int s_sTest = 0;
+                if (0 == s_sTest) {
+                    FILE *outFile = fopen("1.h26x", "wb");
+                    fwrite(pDataIn, nLen, 1, outFile);
+                    fclose(outFile);
+                    s_sTest = 1;
+                }*/
+                int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
+                    nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
+                if (nSPSLen <= 0) {
+                    return -1;
+                }
+                m_bFirstDec = 0;
             }
-            m_bFirstDec = 0;
         }
         VIDEO_FRAME_S pstFrame;
         VIDEO_STREAM_S pstStream;

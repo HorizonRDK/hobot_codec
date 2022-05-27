@@ -262,41 +262,38 @@ int HobotVenc::ReleaseFrame(TFrameData *pFrame)
 int HobotVenc::GetFrame(TFrameData *pOutFrm) {
     int s32Ret;
     if (enCT_START == m_nCodecSt) {
-        // VIDEO_STREAM_S pstStream;
-        do {
-            if (-1 == HWCodec::GetFrame(pOutFrm))
-                return -1;
-            s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 3000);  // m_curGetStream
-            ROS_printf(2, "[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d,tm=%d.%d\n",
-                m_nCodecChn, m_nPicWidth, m_nPicHeight, m_nGetCnt, m_curGetStream.pstPack.size,
-                s32Ret, pOutFrm->time_stamp.tv_sec, pOutFrm->time_stamp.tv_nsec);
-            if (s32Ret != 0) {
-                usleep(10000);
-                return -1;
-            }
-            pOutFrm->mPtrData = reinterpret_cast<uint8_t*>(m_curGetStream.pstPack.vir_ptr);
-            pOutFrm->mDataLen = m_curGetStream.pstPack.size;
-            pOutFrm->mWidth = m_nPicWidth;
-            pOutFrm->mHeight = m_nPicHeight;
-            pOutFrm->mFrameFmt = m_enPalType;
-            ++m_nGetCnt;
+        if (-1 == HWCodec::GetFrame(pOutFrm))
+            return -1;
+        s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 3000);  // m_curGetStream
+        ROS_printf(2, "[HB_VENC_GetStream]->chn=%d w:h=%d:%d,getNum=%d,dlen=%d,ret=%d,tm=%d.%d\n",
+            m_nCodecChn, m_nPicWidth, m_nPicHeight, m_nGetCnt, m_curGetStream.pstPack.size,
+            s32Ret, pOutFrm->time_stamp.tv_sec, pOutFrm->time_stamp.tv_nsec);
+        if (s32Ret != 0) {
+            usleep(10000);
+            return -1;
+        }
+        pOutFrm->mPtrData = reinterpret_cast<uint8_t*>(m_curGetStream.pstPack.vir_ptr);
+        pOutFrm->mDataLen = m_curGetStream.pstPack.size;
+        pOutFrm->mWidth = m_nPicWidth;
+        pOutFrm->mHeight = m_nPicHeight;
+        pOutFrm->mFrameFmt = m_enPalType;
+        ++m_nGetCnt;
 #ifdef TEST_SAVE
-            if (NULL == outH264File)
-                outH264File = fopen("enc.dat", "wb");
-            if (outH264File) {
-                fwrite(m_curGetStream.pstPack.vir_ptr,
-                    m_curGetStream.pstPack.size, 1, outH264File);
-            }
+        if (NULL == outH264File)
+            outH264File = fopen("enc.dat", "wb");
+        if (outH264File) {
+            fwrite(m_curGetStream.pstPack.vir_ptr,
+                m_curGetStream.pstPack.size, 1, outH264File);
+        }
 #endif
-            /*if (0 == s_enctest) {
-                FILE *outFile = fopen("enc.jpg", "wb");
-                fwrite(m_curGetStream.pstPack.vir_ptr,
-                                m_curGetStream.pstPack.size, 1, outFile);
-                fclose(outFile);
-                s_enctest = 1;
-            }*/
-            // s32Ret = HB_VENC_ReleaseStream(m_nCodecChn, &m_curGetStream);
-        } while (0);
+        /*if (0 == s_enctest) {
+            FILE *outFile = fopen("enc.jpg", "wb");
+            fwrite(m_curGetStream.pstPack.vir_ptr,
+                            m_curGetStream.pstPack.size, 1, outFile);
+            fclose(outFile);
+            s_enctest = 1;
+        }*/
+        // s32Ret = HB_VENC_ReleaseStream(m_nCodecChn, &m_curGetStream);
         return 0;
     }
     return -100;

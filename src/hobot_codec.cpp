@@ -239,7 +239,6 @@ int HobotCodec::init()
 #endif
   }
   // step1: create publish
-  const int period_ms = 1000.0 / framerate_;
   RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
     "[%s]->Create sub_cb with mode: %s, find=%d", __func__, in_mode_.c_str(), in_mode_.find("shared_mem"));
 
@@ -249,6 +248,7 @@ int HobotCodec::init()
   m_spThrdPut = std::make_shared<std::thread>(std::bind(&HobotCodec::exec_loopPut, this));
 #endif
 /*#else
+  const int period_ms = 1000.0 / framerate_;
   if (out_mode_.compare("shared_mem") != 0) {
     ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), PUB_QUEUE_NUM);
 
@@ -323,7 +323,6 @@ void HobotCodec::exec_loopPut() {
 #endif
 
 void HobotCodec::exec_loopPub() {
-  const int period_ms = 1000.0 / framerate_;
   bool bHobot = false;
   if (out_mode_.compare("shared_mem") != 0) {
     if (0 == out_format_.compare("h264") ||
@@ -346,8 +345,8 @@ void HobotCodec::exec_loopPub() {
     }
 #endif
   }
-  RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[ros]->pub %s, topic=%s, period=%d.\n",
-    out_format_.c_str(), out_pub_topic_.c_str(), period_ms);
+  RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[ros]->pub %s, topic=%s.\n",
+    out_format_.c_str(), out_pub_topic_.c_str());
   while (!stop_) {
     // 判断当前执行的模式
     if (bHobot) {
@@ -355,8 +354,6 @@ void HobotCodec::exec_loopPub() {
     } else {
       timer_ros_pub();
     }
-    usleep(10000);
-    // usleep(period_ms*1000);
   }
 }
 

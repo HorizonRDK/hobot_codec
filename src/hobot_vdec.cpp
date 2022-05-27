@@ -397,36 +397,33 @@ int HobotVdec::GetFrame(TFrameData *pOutFrm) {
         struct timeval now;
         struct timespec outtime;
 
-        do {
-            s32Ret = HB_VDEC_GetFrame(m_nCodecChn, &m_curFrameInfo, 20);
-            if (s32Ret == 0) {
-                HWCodec::GetFrame(pOutFrm);
-                // m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width
-                pOutFrm->mPtrY = reinterpret_cast<uint8_t*>(m_curFrameInfo.stVFrame.vir_ptr[0]);
-                pOutFrm->mPtrUV = reinterpret_cast<uint8_t*>(m_curFrameInfo.stVFrame.vir_ptr[1]);
-                // m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width / 2
-                pOutFrm->mDataLen = m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width * 3 / 2;
-                pOutFrm->mWidth = m_curFrameInfo.stVFrame.width;
-                pOutFrm->mHeight = m_curFrameInfo.stVFrame.height;
-                pOutFrm->mFrameFmt = HB_PIXEL_FORMAT_NV12;  // 通通 nv12
-                ROS_printf(2, "[%s]->0x%x:0x%x 1-0x%x, w:h=%dx%d, dlen=%d.\n",
-                    __func__, pOutFrm->mPtrY, m_curFrameInfo.stVFrame.vir_ptr[0], m_curFrameInfo.stVFrame.vir_ptr[1],
-                    m_curFrameInfo.stVFrame.width, m_curFrameInfo.stVFrame.height, pOutFrm->mDataLen);
-                if (0 == s_test) {
-                    FILE *outFile = fopen("decode.nv12", "wb");
-                    fwrite(pOutFrm->mPtrY, pOutFrm->mWidth * pOutFrm->mHeight, 1, outFile);
-                    fwrite(pOutFrm->mPtrUV, pOutFrm->mWidth * pOutFrm->mHeight / 2, 1, outFile);
-                    fclose(outFile);
-                    s_test = 1;
-                }
-                // HB_VDEC_ReleaseFrame(m_nCodecChn, &m_curFrameInfo);
-                return 0;
-            } else {
-                ROS_printf(0, "HB_VDEC_GetFrame failed:%d\n", s32Ret);
-                usleep(5000);
-                return -1;
+        s32Ret = HB_VDEC_GetFrame(m_nCodecChn, &m_curFrameInfo, 1000);
+        if (s32Ret == 0) {
+            HWCodec::GetFrame(pOutFrm);
+            // m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width
+            pOutFrm->mPtrY = reinterpret_cast<uint8_t*>(m_curFrameInfo.stVFrame.vir_ptr[0]);
+            pOutFrm->mPtrUV = reinterpret_cast<uint8_t*>(m_curFrameInfo.stVFrame.vir_ptr[1]);
+            // m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width / 2
+            pOutFrm->mDataLen = m_curFrameInfo.stVFrame.height * m_curFrameInfo.stVFrame.width * 3 / 2;
+            pOutFrm->mWidth = m_curFrameInfo.stVFrame.width;
+            pOutFrm->mHeight = m_curFrameInfo.stVFrame.height;
+            pOutFrm->mFrameFmt = HB_PIXEL_FORMAT_NV12;  // 通通 nv12
+            ROS_printf(2, "[%s]->0x%x:0x%x 1-0x%x, w:h=%dx%d, dlen=%d.\n",
+                __func__, pOutFrm->mPtrY, m_curFrameInfo.stVFrame.vir_ptr[0], m_curFrameInfo.stVFrame.vir_ptr[1],
+                m_curFrameInfo.stVFrame.width, m_curFrameInfo.stVFrame.height, pOutFrm->mDataLen);
+            if (0 == s_test) {
+                FILE *outFile = fopen("decode.nv12", "wb");
+                fwrite(pOutFrm->mPtrY, pOutFrm->mWidth * pOutFrm->mHeight, 1, outFile);
+                fwrite(pOutFrm->mPtrUV, pOutFrm->mWidth * pOutFrm->mHeight / 2, 1, outFile);
+                fclose(outFile);
+                s_test = 1;
             }
-        } while (enCT_START == m_nCodecSt);
+            // HB_VDEC_ReleaseFrame(m_nCodecChn, &m_curFrameInfo);
+            return 0;
+        } else {
+            ROS_printf(0, "HB_VDEC_GetFrame failed:%d\n", s32Ret);
+            return -1;
+        }
     }
     return -100;
 }

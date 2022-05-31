@@ -103,7 +103,7 @@ ros2 run hobot_codec hobot_codec_republish
 
     由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
 
-
+运行方式1，命令方式：
 解码 jpeg 测试：
 ```
 ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
@@ -129,6 +129,9 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=
 
 ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=h264 -p out_mode:=ros -p out_format:=nv12 -p sub_topic:=/image_h264 -p pub_topic:=/image_nv12
 ```
+运行方式2，使用launch文件启动：
+`ros2 launch install/share/hobot_codec/launch/hobot_codec.launch.py`
+
 
 ## X3 linaro系统
 

@@ -607,6 +607,11 @@ void HobotCodec::in_ros_topic_cb(
   if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(msg->width, msg->height)) {
     if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
       int nYuvLen = msg->width * msg->height * 3 / 2;
+      if (msg->data.size() != nYuvLen * 2) {
+        RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->inlen err %d-%d",
+          __func__, msg->data.size(), nYuvLen * 2);
+        return;
+      }
       if (nullptr == mPtrInNv12)
         mPtrInNv12 = new uint8_t[nYuvLen];
       if (0 == in_format_.compare("bgr8") && mPtrInNv12) {

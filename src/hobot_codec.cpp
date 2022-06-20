@@ -360,6 +360,7 @@ void HobotCodec::exec_loopPub() {
     } else {
       timer_ros_pub();
     }
+    usleep(1*1000);
   }
 }
 

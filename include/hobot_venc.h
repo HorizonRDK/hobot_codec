@@ -26,7 +26,8 @@ class HobotVenc : public HWCodec {
   ~HobotVenc();
   virtual int InitCodec();
   virtual int UninitCodec();
-  virtual int PutData(const uint8_t *pDataIn, int nLen, const struct timespec &time_stamp);
+  virtual int PutData(const uint8_t *pDataIn, int nLen,
+    const struct timespec &time_stamp);
   virtual int GetFrame(TFrameData *pOutFrm);
   virtual int ReleaseFrame(TFrameData *pFrame);
 
@@ -42,7 +43,6 @@ class HobotVenc : public HWCodec {
   int init_venc();
   int chnAttr_init();
   int venc_setRcParam(int bitRate);
-  int prepare_user_buf_2lane(void *buf, uint32_t size_y, uint32_t size_uv);
   VENC_CHN_ATTR_S m_oVencChnAttr;
   VIDEO_STREAM_S m_curGetStream;
 

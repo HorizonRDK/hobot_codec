@@ -712,6 +712,9 @@ void HobotCodec::timer_ros_pub()
         img_pub_->width = oFrame.mWidth;
         img_pub_->height = oFrame.mHeight;
         img_pub_->step = oFrame.mWidth;
+        if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
+          img_pub_->step = oFrame.mWidth * 3;
+        }
         img_pub_->encoding = out_format_.c_str();
         /*if (time_last.tv_nsec == oFrame.time_stamp.tv_nsec && time_last.tv_sec == oFrame.time_stamp.tv_sec ) {          
           std::stringstream ss;
@@ -800,6 +803,9 @@ void HobotCodec::timer_hbmem_pub()
           msg.height = oFrame.mHeight;
           msg.width = oFrame.mWidth;
           msg.step = oFrame.mWidth;
+          if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
+            img_pub_->step = oFrame.mWidth * 3;
+          }
           msg.data_size = oFrame.mDataLen;
           int nOffSet = oFrame.mHeight * oFrame.mWidth;
           if (HB_PIXEL_FORMAT_NV12 == oFrame.mFrameFmt) {

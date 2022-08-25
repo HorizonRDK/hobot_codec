@@ -58,7 +58,6 @@ typedef struct _tag_FrameData {
   struct timespec time_stamp;
 } TFrameData;
 
-extern "C" int ROS_printf(int nLevel, char *fmt, ...);
 
 #define MMZ_CNT 5
 class HWCodec {
@@ -126,7 +125,7 @@ class HWCodec {
   uint64_t m_arrMMZ_PAddr[MMZ_CNT];
   char* m_arrMMZ_VAddr[MMZ_CNT];
   // memset(mmz_paddr, 0, sizeof(mmz_paddr));
-  // int mmz_size;  //= width * height;
+  int mmz_size = 0;
   uint32_t m_tmLastPush = 0;  // 上次 push 的时间
   int m_nMMZCnt = MMZ_CNT;
   int m_nUseCnt = 0;  // push 个数

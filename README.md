@@ -87,17 +87,19 @@ ros2 run hobot_codec hobot_codec_republish
 ```
 ### 目前参数列表：
 
-| 参数名      | 含义                 | 取值                          | 默认值                |
-| ----------- | -------------------- | ----------------------------- | --------------------- |
-| channel     | 处理通道号           | 0-3                           | 0                     |
-| in_mode     | 接入数据传输的方式   | ros/shared_mem                | ros                   |
-| out_mode    | 发出数据传输方式     | ros/shared_mem                | ros                   |
-| in_format   | 订阅的数据格式       | bgr8/rgb8/nv12/jpeg/h264/h265 | bgr8                  |
-| out_format  | 处理后发布的数据格式 | bgr8/rgb8/nv12/jpeg/h264/h265 | jpeg                  |
-| sub_topic   | 订阅的话题名字       | 任意字符串，但必须是别的node 发布的topic   | /image_raw            |
-| pub_topic   | 发布的话题名字       | 任意字符串                    | /image_raw/compressed |
-| enc_qp      | 264/265编码质量      | 浮点数 0-100                  | 10.0                  |
-| jpg_quality | jpeg 编码质量        | 浮点数 0-100                  | 60.0                  |
+| 参数名           | 含义                         | 取值                                          | 默认值                |
+| ---------------- | ---------------------------- | --------------------------------------------- | --------------------- |
+| channel          | 处理通道号                   | 0-3                                           | 0                     |
+| in_mode          | 接入数据传输的方式           | ros/shared_mem                                | ros                   |
+| out_mode         | 发出数据传输方式             | ros/shared_mem                                | ros                   |
+| in_format        | 订阅的数据格式               | bgr8/rgb8/nv12/jpeg/h264/h265                 | bgr8                  |
+| out_format       | 处理后发布的数据格式         | bgr8/rgb8/nv12/jpeg/jpeg-compressed/h264/h265 | jpeg                  |
+| sub_topic        | 订阅的话题名字               | 任意字符串，但必须是别的node 发布的topic      | /image_raw            |
+| pub_topic        | 发布的话题名字               | 任意字符串                                    | /image_raw/compressed |
+| enc_qp           | 264/265编码质量              | 浮点数 0-100                                  | 10.0                  |
+| jpg_quality      | jpeg 编码质量                | 浮点数 0-100                                  | 60.0                  |
+| input_framerate  | 输入帧率，实际送数据帧率     | 正整数                                        | 30                    |
+| output_framerate | 输出帧率，仅编码模式支持配置 | 正整数，小于等于输入帧率                      | -1（不开启帧率控制）  |
 
 ### 注意：
 
@@ -121,7 +123,16 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=
 #share memory
 ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg
 ```
+编码jpeg，发布compressed格式消息，并设置输出帧率：
+
+~~~shell
+ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
+
+ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg-compressed -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg/compressed -p output_framerate:=20
+~~~
+
 编解码 h264 测试：
+
 ```
 ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12
 

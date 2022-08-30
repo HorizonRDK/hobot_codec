@@ -46,7 +46,7 @@ void TestSave(char *pFilePath, char *imgData, int nDlen)
   }
 }
 const char* enc_types[] = {
-    "jpeg", "h264", "h265"};
+    "jpeg", "jpeg-compressed", "h264", "h265"};
 
 const char* raw_types[] = {
     "bgr8", "rgb8", "nv12"};
@@ -70,10 +70,10 @@ int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
 void HobotCodec::get_params()
 {
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
-  for (auto & parameter : parameters_client->get_parameters(
-      {"sub_topic", "pub_topic", "channel", "in_mode", "out_mode",
-        "in_format", "out_format", "enc_qp", "jpg_quality"}))
-  {
+  for (auto &parameter : parameters_client->get_parameters(
+           {"sub_topic", "pub_topic", "channel", "in_mode", "out_mode",
+            "in_format", "out_format", "enc_qp", "jpg_quality",
+            "input_framerate", "output_framerate"})) {
     if (parameter.get_name() == "sub_topic") {
       RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
         "sub_topic value: %s", parameter.value_to_string().c_str());
@@ -104,6 +104,14 @@ void HobotCodec::get_params()
       mChannel_ = parameter.as_int();
       RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
         "mChannel_ value: %s", parameter.value_to_string().c_str());
+    } else if (parameter.get_name() == "input_framerate") {
+      input_framerate_ = parameter.as_int();
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+        "input_framerate_ value: %s", parameter.value_to_string().c_str());
+    } else if (parameter.get_name() == "output_framerate") {
+      output_framerate_ = parameter.as_int();
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+        "output_framerate_ value: %s", parameter.value_to_string().c_str());
     } else {
       RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
         "Invalid parameter name: %s", parameter.get_name().c_str());
@@ -122,6 +130,7 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
   std::string node_name)
     : Node(node_name, node_options),
     img_pub_(new sensor_msgs::msg::Image()),
+    compressed_img_pub_(new sensor_msgs::msg::CompressedImage()),
 #ifdef THRD_CODEC_PUT
     m_arrRecvImg(DelRecvImg),
 #endif
@@ -135,6 +144,8 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
   this->declare_parameter("out_format", "jpeg");
   this->declare_parameter("enc_qp", 10.0);
   this->declare_parameter("jpg_quality", 60.0);
+  this->declare_parameter("input_framerate", 30);
+  this->declare_parameter("output_framerate", -1);
   get_params();
 
   RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
@@ -170,7 +181,7 @@ int HobotCodec::init()
 {
   // 收到数据才可以知道 宽高，才能真正创建
   if (0 != out_format_.compare(in_format_)) {
-    if (IsType(out_format_.c_str(), enc_types, 3)) {
+    if (IsType(out_format_.c_str(), enc_types, 4)) {
       m_pHwCodec = new HobotVenc(mChannel_, out_format_.c_str());
       RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
         "Create encodec with fmt: %s", out_format_.c_str());
@@ -317,6 +328,10 @@ void HobotCodec::exec_loopPub() {
       0 == out_format_.compare("h265") ) {
       ros_h26ximage_publisher_ = this->create_publisher<img_msgs::msg::H26XFrame>(
         out_pub_topic_.c_str(), PUB_QUEUE_NUM);
+    } else if (0 == out_format_.compare("jpeg-compressed")) {
+      ros_compressed_image_publisher_ =
+          this->create_publisher<sensor_msgs::msg::CompressedImage>(
+              out_pub_topic_, PUB_QUEUE_NUM);
     } else {
       ros_image_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     }
@@ -355,7 +370,7 @@ void DeepInitItem(void *pItem, void *pSrcItem)
     unsigned char *pRealData = nullptr;
     if (NULL == pDst->mPImgData) {
       // jpg/h264/h265 一般不会超过 256K
-      if (IsType(pSrc->encoding, enc_types, 3))
+      if (IsType(pSrc->encoding, enc_types, 4))
         pDst->mPImgData = new unsigned char[256000];
       else
         pDst->mPImgData = new unsigned char[pSrc->mDataLen];
@@ -484,6 +499,21 @@ void HobotCodec::in_hbmem_topic_cb(
       __func__, in_format_.c_str(), msg->encoding.data());
     return;
   }
+
+  sub_frame_count_++;
+  if (output_framerate_ > 0) {
+    sub_frame_output_ += output_framerate_;
+    if (sub_frame_output_ >= input_framerate_) {
+      sub_frame_output_ -= input_framerate_;
+    } else {
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+                  "[%s]->drop %d, input %d, output %d, %d", __func__,
+                  sub_frame_count_, input_framerate_, output_framerate_,
+                  sub_frame_output_);
+      return;
+    }
+  }
+
 #ifdef THRD_CODEC_PUT
   put_hbm_frame(msg);
   /*TRecvImg oTmp = { 0 };
@@ -590,6 +620,20 @@ void HobotCodec::in_ros_topic_cb(
     }
   }
 
+  sub_frame_count_++;
+  if (output_framerate_ > 0) {
+    sub_frame_output_ += output_framerate_;
+    if (sub_frame_output_ >= input_framerate_) {
+      sub_frame_output_ -= input_framerate_;
+    } else {
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+                  "[%s]->drop %d, input %d, output %d, %d", __func__,
+                  sub_frame_count_, input_framerate_, output_framerate_,
+                  sub_frame_output_);
+      return;
+    }
+  }
+
 #ifdef THRD_CODEC_PUT
   put_rosimg_frame(msg);
 #else
@@ -660,7 +704,6 @@ void HobotCodec::in_ros_compressed_cb(
 #ifdef THRD_CODEC_PUT
   put_compressedimg_frame(img_msg);
 #else
-
   if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(1920, 1080)) {
     m_pHwCodec->PutData(img_msg->data.data(), img_msg->data.size(), time_in);
   }
@@ -689,6 +732,18 @@ void HobotCodec::timer_ros_pub()
         frameh26x_sub_->data.resize(oFrame.mDataLen);
         memcpy(&frameh26x_sub_->data[0], oFrame.mPtrData, oFrame.mDataLen);
         ros_h26ximage_publisher_->publish(*frameh26x_sub_);
+      } else if (0 == out_format_.compare("jpeg-compressed")) {
+        compressed_img_pub_->header.stamp.sec = oFrame.time_stamp.tv_sec;
+        compressed_img_pub_->header.stamp.nanosec = oFrame.time_stamp.tv_nsec;
+        compressed_img_pub_->header.frame_id = "default_cam";
+        compressed_img_pub_->format = "jpeg";
+        // compressed_img_pub_->format = "rgb8; jpeg compressed bgr8";
+
+        compressed_img_pub_->data.resize(oFrame.mDataLen);
+        memcpy(compressed_img_pub_->data.data(), oFrame.mPtrData,
+               oFrame.mDataLen);
+        if (ros_compressed_image_publisher_)
+          ros_compressed_image_publisher_->publish(*compressed_img_pub_);
       } else {
         img_pub_->header.stamp.sec = oFrame.time_stamp.tv_sec;
         img_pub_->header.stamp.nanosec = oFrame.time_stamp.tv_nsec;

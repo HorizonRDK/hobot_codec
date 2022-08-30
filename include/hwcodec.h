@@ -70,7 +70,8 @@ class HWCodec {
       m_enPalType = PT_H264;
     else if (strcmp(m_tsCodecType, "h265") == 0)
       m_enPalType = PT_H265;
-    else if (strcmp(m_tsCodecType, "jpeg") == 0)
+    else if (strcmp(m_tsCodecType, "jpeg") == 0 ||
+             strcmp(m_tsCodecType, "jpeg-compressed") == 0)
       m_enPalType = PT_JPEG;
   };
   ~HWCodec() {}
@@ -119,7 +120,7 @@ class HWCodec {
   pthread_cond_t m_condInit;
   int m_nCodecChn;
   int m_nCodecSt;
-  char m_tsCodecType[12] = "";
+  char m_tsCodecType[32] = "";
 
  protected:
   uint64_t m_arrMMZ_PAddr[MMZ_CNT];

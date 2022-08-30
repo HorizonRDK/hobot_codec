@@ -103,7 +103,10 @@ class HobotCodec : public rclcpp::Node {
   // ----------------------------------------------------------------- pub begin
   // shared image message
   sensor_msgs::msg::Image::UniquePtr img_pub_;
+  sensor_msgs::msg::CompressedImage::UniquePtr compressed_img_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr ros_image_publisher_ = nullptr;
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr ros_compressed_image_publisher_ = nullptr;
+
 #ifdef SHARED_MEM_MSG
   rclcpp::TimerBase::SharedPtr timer_hbmem_;
   rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr hbmem_publisher_;
@@ -131,6 +134,11 @@ class HobotCodec : public rclcpp::Node {
   std::chrono::high_resolution_clock::time_point sub_imgraw_tp_;
   int sub_imgraw_frameCount_ = 0;
   std::mutex frame_statraw_mtx_;
+
+  uint64_t sub_frame_count_ = 0;
+  uint64_t sub_frame_output_ = 0;
+  int input_framerate_ = 30;
+  int output_framerate_ = -1;
 
  private:
   HWCodec *m_pHwCodec = nullptr;

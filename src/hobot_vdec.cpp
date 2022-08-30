@@ -326,8 +326,8 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
         "input nLen: %d exceeds alloc mmz_size: %d, dump to file: %s",
         nLen, mmz_size, fname.data());
-    //   std::ofstream ofs(fname);
-    //   ofs.write(reinterpret_cast<const char*>(pDataIn), nLen);
+      std::ofstream ofs(fname);
+      ofs.write(reinterpret_cast<const char*>(pDataIn), nLen);
       return -1;
     }
     int s32Ret;

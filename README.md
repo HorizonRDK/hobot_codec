@@ -99,7 +99,7 @@ ros2 run hobot_codec hobot_codec_republish
 | enc_qp           | 264/265编码质量              | 浮点数 0-100                                  | 10.0                  |
 | jpg_quality      | jpeg 编码质量                | 浮点数 0-100                                  | 60.0                  |
 | input_framerate  | 输入帧率，实际送数据帧率     | 正整数                                        | 30                    |
-| output_framerate | 输出帧率，仅编码模式支持配置 | 正整数                                        |                       |
+| output_framerate | 输出帧率，仅编码模式支持配置 | 正整数，小于等于输入帧率                      | -1（不开启帧率控制）  |
 
 ### 注意：
 

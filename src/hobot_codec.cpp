@@ -23,26 +23,6 @@
 #include "include/video_utils.hpp"
 
 #define PUB_QUEUE_NUM 5
-extern "C" int ROS_printf(int nLevel, char *fmt, ...)
-{
-  char buf[512] = { 0 };
-  va_list args;
-  va_start(args, fmt);
-  vsprintf(buf, fmt, args);
-  switch (nLevel) {
-    case 0:
-      RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "%s", buf);
-    break;
-    case 1:
-      RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "%s", buf);
-    break;
-    default:
-      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "%s", buf);
-    break;
-  }
-
-  va_end(args);
-}
 // 返回ms
 int32_t tool_calc_time_laps(const struct timespec &time_start, const struct timespec &time_end)
 {
@@ -59,7 +39,6 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
 
 void TestSave(char *pFilePath, char *imgData, int nDlen)
 {
-  static int s_nSave = 0;
   FILE *yuvFd = fopen(pFilePath, "w+");
   if (yuvFd) {
     fwrite(imgData, 1, nDlen, yuvFd);
@@ -147,7 +126,6 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
     m_arrRecvImg(DelRecvImg),
 #endif
     frameh26x_sub_(new img_msgs::msg::H26XFrame) {
-  stop_ = false;
   this->declare_parameter("sub_topic", "/image_raw");
   this->declare_parameter("pub_topic", "/image_raw/compressed");
   this->declare_parameter("channel", 0);
@@ -167,7 +145,6 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
 
 HobotCodec::~HobotCodec()
 {
-  stop_ = true;
   if (m_spThrdPub) {
     m_spThrdPub->join();
   }
@@ -176,13 +153,16 @@ HobotCodec::~HobotCodec()
     m_spThrdPut->join();
   }
 #endif
-  if (mPtrInNv12)
+  if (mPtrInNv12) {
     delete[] mPtrInNv12;
+    mPtrInNv12 = nullptr;
+  }
   if (mPtrOutRGB2)
     delete[] mPtrOutRGB2;
   if (nullptr != m_pHwCodec) {
     m_pHwCodec->UninitCodec();
     delete m_pHwCodec;
+    m_pHwCodec = nullptr;
   }
 }
 #define USE_THREAD
@@ -271,6 +251,8 @@ int HobotCodec::init()
 #endif
   }
 #endif*/
+
+  return 0;
 }
 
 #ifdef THRD_CODEC_PUT
@@ -279,7 +261,7 @@ int HobotCodec::init()
 void HobotCodec::exec_loopPut() {
   // 获取sub 到的数据，FIFO ，put 到 codec 里面
 #ifdef THRD_CODEC_PUT
-  while (!stop_) {
+  while (rclcpp::ok()) {
     TRecvImg* pData = m_arrRecvImg.dequeue_val();  // dequeue();
     if (pData && pData->mDataLen > 0) {
       if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(pData->mWidth, pData->mHeight)) {
@@ -353,7 +335,7 @@ void HobotCodec::exec_loopPub() {
   }
   RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[ros]->pub %s, topic=%s.\n",
     out_format_.c_str(), out_pub_topic_.c_str());
-  while (!stop_) {
+  while (rclcpp::ok()) {
     // 判断当前执行的模式
     if (bHobot) {
       timer_hbmem_pub();
@@ -678,6 +660,7 @@ void HobotCodec::in_ros_compressed_cb(
 #ifdef THRD_CODEC_PUT
   put_compressedimg_frame(img_msg);
 #else
+
   if (nullptr != m_pHwCodec && 0 == m_pHwCodec->Start(1920, 1080)) {
     m_pHwCodec->PutData(img_msg->data.data(), img_msg->data.size(), time_in);
   }

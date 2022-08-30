@@ -60,7 +60,6 @@ class HobotCodec : public rclcpp::Node {
  private:
   int init();
   std::shared_ptr<std::thread> m_spThrdPub;
-  std::atomic<bool> stop_;
   void exec_loopPub();
 #ifdef THRD_CODEC_PUT
   std::shared_ptr<std::thread> m_spThrdPut;
@@ -79,7 +78,7 @@ class HobotCodec : public rclcpp::Node {
   sensor_msgs::msg::Image::UniquePtr img_sub_;
   rclcpp::Subscription<img_msgs::msg::H26XFrame>::ConstSharedPtr
     ros_subscrip_h26x_ = nullptr;
-  img_msgs::msg::H26XFrame::UniquePtr frameh26x_sub_;
+  img_msgs::msg::H26XFrame::UniquePtr frameh26x_sub_ = nullptr;
   rclcpp::Publisher<img_msgs::msg::H26XFrame>::SharedPtr ros_h26ximage_publisher_ = nullptr;
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::ConstSharedPtr
     ros_subscription_compressed_ = nullptr;
@@ -88,7 +87,7 @@ class HobotCodec : public rclcpp::Node {
 #ifdef SHARED_MEM_MSG
   int32_t mSendIdx = 0;
   rclcpp::SubscriptionHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr
-      hbmem_subscription_;
+      hbmem_subscription_ = nullptr;
   rclcpp::SubscriptionHbmem<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr
       hbmemH26x_subscription_;
 #endif

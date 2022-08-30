@@ -33,10 +33,7 @@ int main(int argc, char** argv) {
   auto node = std::make_shared<HobotCodec>(opt, strName + std::to_string(start.nanoseconds()));
   RCLCPP_WARN(rclcpp::get_logger("example"), "HobotCodec init!");
 
-  rclcpp::executors::SingleThreadedExecutor exec;
-  exec.add_node(node);
-  RCLCPP_WARN(rclcpp::get_logger("example"), "HobotCodec add_node!");
-  exec.spin();
+  rclcpp::spin(node);
 
   rclcpp::shutdown();
   return 0;

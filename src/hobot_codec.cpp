@@ -118,6 +118,98 @@ void HobotCodec::get_params()
     }
   }
 }
+
+void HobotCodec::check_params()
+{
+  if (mChannel_ < 0 || mChannel_ > 3) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+        "Invalid channel number: %d! 0~3 are supported, "
+        "please check the channel parameter.", mChannel_);
+    rclcpp::shutdown();
+  }
+  if (in_mode_ != "ros" && in_mode_ != "shared_mem") {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid in_mode: %s! 'ros' and 'shared_mem' are supported. "
+    "Please check the in_mode parameter.", in_mode_.c_str());
+    rclcpp::shutdown();
+  }
+  if (out_mode_ != "ros" && out_mode_ != "shared_mem") {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid out_mode: %s! 'ros' and 'shared_mem' are supported. "
+    "Please check the out_mode parameter.", out_mode_.c_str());
+    rclcpp::shutdown();
+  }
+  if (in_format_ != "bgr8" && in_format_ != "rgb8"
+      && in_format_ != "nv12" && in_format_ != "jpeg"
+      && in_format_ != "h264" && in_format_ != "h265") {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'h264' "
+    "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
+    rclcpp::shutdown();
+  }
+  if (out_format_ != "bgr8" && out_format_ != "rgb8"
+      && out_format_ != "nv12"
+      && out_format_ != "jpeg" && out_format_ != "jpeg-compressed"
+      && out_format_ != "h264" && out_format_ != "h265") {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid out_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', "
+    "'h264' and 'h265' are supported. "
+    "Please check the out_format parameter.", out_format_.c_str());
+    rclcpp::shutdown();
+  }
+  if (IsType(out_format_.c_str(), enc_types, 4)) {
+    if (enc_qp_ < 0 || enc_qp_ > 100) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+      "Invalid enc_qp: %f! The value range is floating point number from 0 to 100."
+      " Please check the enc_qp parameter.", enc_qp_);
+      rclcpp::shutdown();
+    }
+    if (jpg_quality_ < 0 || jpg_quality_ > 100) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+      "Invalid jpg_quality: %f! The value range is floating point number from 0 to 100."
+      " Please check the jpg_quality parameter.", jpg_quality_);
+      rclcpp::shutdown();
+    }
+  }
+  if (input_framerate_ <= 0) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid input_framerate: %d! The input_framerate must be a positive integer! "
+    "Use '30' instead!", input_framerate_);
+    input_framerate_ = 30;
+  }
+  if (output_framerate_ <=0 && output_framerate_ != -1) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "Invalid output_framerate: %d! The output_framerate must be a positive integer or '-1'! "
+    "Use '-1' instead!", output_framerate_);
+    output_framerate_ = -1;
+  }
+  if (output_framerate_ > input_framerate_) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    "input_framerate: %d output_framerate: %d, "
+    "output_framerate must be less than or equal to input_framerate",
+    input_framerate_,
+    output_framerate_);
+    rclcpp::shutdown();
+  }
+}
+
+void HobotCodec::on_get_timer()
+{
+  struct timespec time_now = {0, 0};
+  clock_gettime(CLOCK_REALTIME, &time_now);
+  uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  //定时器每隔5s检查一次获取图片的时间，如果已经超过5s还未收到，会输出error日志。
+  if (mNow - get_image_time >= 5000) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+                 "Hobot_Codec has not received image for more than 5 seconds!"
+                 " Please check whether the image publisher still exists by "
+                 "'ros2 topic info %s'!",
+                 in_sub_topic_.c_str());
+  }
+  timestamp_lk.unlock();
+}
+
 void DelRecvImg(void *pItem)
 {
   TRecvImg* pImg = reinterpret_cast<TRecvImg*>(pItem);
@@ -147,6 +239,11 @@ HobotCodec::HobotCodec(const rclcpp::NodeOptions& node_options,
   this->declare_parameter("input_framerate", 30);
   this->declare_parameter("output_framerate", -1);
   get_params();
+  check_params();
+
+  get_timer = this->create_wall_timer(
+      std::chrono::milliseconds(static_cast<int64_t>(5000)),
+      std::bind(&HobotCodec::on_get_timer, this));
 
   RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
    "[In]->args: im=%s om=%s if=%s of=%s", in_mode_.c_str(), out_mode_.c_str(),
@@ -457,6 +554,9 @@ void HobotCodec::in_hbmemh264_topic_cb(
   time_in.tv_nsec = msg->dts.nanosec;
   time_in.tv_sec = msg->dts.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  get_image_time = mNow;
+  timestamp_lk.unlock();
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -488,6 +588,10 @@ void HobotCodec::in_hbmem_topic_cb(
   time_in.tv_nsec = msg->time_stamp.nanosec;
   time_in.tv_sec = msg->time_stamp.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  get_image_time = mNow;
+  timestamp_lk.unlock();
+
   std::stringstream ss;
   ss << "in_hbmem_topic_cb img: " << msg->encoding.data()
   << ", stamp: " << msg->time_stamp.sec
@@ -558,6 +662,9 @@ void HobotCodec::in_ros_h26x_topic_cb(
   time_in.tv_nsec = msg->dts.nanosec;
   time_in.tv_sec = msg->dts.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  get_image_time = mNow;
+  timestamp_lk.unlock();
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -600,6 +707,9 @@ void HobotCodec::in_ros_topic_cb(
   time_in.tv_nsec = msg->header.stamp.nanosec;
   time_in.tv_sec = msg->header.stamp.sec;
   uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  get_image_time = mNow;
+  timestamp_lk.unlock();
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -690,6 +800,11 @@ void HobotCodec::in_ros_compressed_cb(
   clock_gettime(CLOCK_REALTIME, &time_now);
   time_in.tv_nsec = img_msg->header.stamp.nanosec;
   time_in.tv_sec = img_msg->header.stamp.sec;
+
+  uint64_t mNow = (time_now.tv_sec * 1000 + time_now.tv_nsec / 1000000);
+  std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
+  get_image_time = mNow;
+  timestamp_lk.unlock();
 
   std::stringstream ss;
   ss << "Recv compressed img: " << img_msg->format

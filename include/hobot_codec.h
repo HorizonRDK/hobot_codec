@@ -115,6 +115,7 @@ class HobotCodec : public rclcpp::Node {
   void timer_ros_pub();
   void timer_hbmem_pub();
   void get_params();
+  void check_params();
   rclcpp::TimerBase::SharedPtr timer_pub_;
 
   // ----------------------------------------------------------------- pub end
@@ -139,6 +140,11 @@ class HobotCodec : public rclcpp::Node {
   uint64_t sub_frame_output_ = 0;
   int input_framerate_ = 30;
   int output_framerate_ = -1;
+
+  uint64_t get_image_time = 0; //获取image时间
+  std::mutex timestamp_mtx;
+  rclcpp::TimerBase::SharedPtr get_timer; //每隔5s检查一次codec获取image的时间
+  void on_get_timer();
 
  private:
   HWCodec *m_pHwCodec = nullptr;

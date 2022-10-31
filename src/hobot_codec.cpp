@@ -50,6 +50,29 @@ const char* enc_types[] = {
 
 const char* raw_types[] = {
     "bgr8", "rgb8", "nv12"};
+
+//接入数据传输的方式支持的类型
+const char* in_mode[] = {
+    "ros", "shared_mem"
+};
+
+//发出数据传输方式支持类型
+const char* out_mode[] = {
+    "ros", "shared_mem"
+};
+
+//支持订阅的数据格式
+const char* in_format[] = {
+  "bgr8", "rgb8", "nv12", "jpeg", "h264", "h265"
+};
+
+//支持的处理后发布数据格式
+const char* out_format[] = {
+  "bgr8","rgb8","nv12","jpeg","jpeg-compressed","h264","h265"
+};
+
+//
+
 // 解析命令，创建编解码器，发布接收节点
 // ros2 run hobot_codec hobot_codec_republish ros jpeg decompress rgb8 --ros-args
 // -p sub_topic:=/image_raw/compressed -p pub_topic:=/image_raw
@@ -127,36 +150,36 @@ void HobotCodec::check_params()
         "please check the channel parameter.", mChannel_);
     rclcpp::shutdown();
   }
-  if (in_mode_ != "ros" && in_mode_ != "shared_mem") {
+  
+  if (!IsType(in_mode_.c_str(), in_mode, 2)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
     "Invalid in_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the in_mode parameter.", in_mode_.c_str());
     rclcpp::shutdown();
   }
-  if (out_mode_ != "ros" && out_mode_ != "shared_mem") {
+  
+  if (!IsType(out_mode_.c_str(), out_mode, 2)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
     "Invalid out_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the out_mode parameter.", out_mode_.c_str());
     rclcpp::shutdown();
   }
-  if (in_format_ != "bgr8" && in_format_ != "rgb8"
-      && in_format_ != "nv12" && in_format_ != "jpeg"
-      && in_format_ != "h264" && in_format_ != "h265") {
+  
+  if (!IsType(in_format_.c_str(), in_format, 6)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
     "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'h264' "
     "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
     rclcpp::shutdown();
   }
-  if (out_format_ != "bgr8" && out_format_ != "rgb8"
-      && out_format_ != "nv12"
-      && out_format_ != "jpeg" && out_format_ != "jpeg-compressed"
-      && out_format_ != "h264" && out_format_ != "h265") {
+  
+  if (!IsType(out_format_.c_str(), out_format, 7)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
     "Invalid out_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', "
     "'h264' and 'h265' are supported. "
     "Please check the out_format parameter.", out_format_.c_str());
     rclcpp::shutdown();
   }
+
   if (IsType(out_format_.c_str(), enc_types, 4)) {
     if (enc_qp_ < 0 || enc_qp_ > 100) {
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
@@ -171,6 +194,7 @@ void HobotCodec::check_params()
       rclcpp::shutdown();
     }
   }
+  
   if (input_framerate_ <= 0) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
     "Invalid input_framerate: %d! The input_framerate must be a positive integer! "

@@ -114,7 +114,9 @@ class HobotCodec : public rclcpp::Node {
 #endif
   void timer_ros_pub();
   void timer_hbmem_pub();
+  //获取启动参数
   void get_params();
+  //检查启动参数是否符合要求，不符合要求会输出error log，并退出进程
   void check_params();
   rclcpp::TimerBase::SharedPtr timer_pub_;
 

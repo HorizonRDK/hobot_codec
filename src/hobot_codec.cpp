@@ -37,6 +37,24 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
   return nRetMs;
 }
 
+void check_image_size(int rec_width,int rec_height,std::string &in_sub_topic_)
+{
+  static int ori_width = -1;
+  static int ori_height = -1;
+  if(ori_width == -1 && ori_height == -1) {
+    ori_width = rec_width;
+    ori_height = rec_height;
+  } else if(ori_width != rec_width || ori_height != rec_height) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
+              " received image width: %d height: %d, the original width: %d height: %d", 
+              in_sub_topic_.c_str(),
+              rec_width,
+              rec_height,
+              ori_width,
+              ori_height);
+  }
+}
+
 void TestSave(char *pFilePath, char *imgData, int nDlen)
 {
   FILE *yuvFd = fopen(pFilePath, "w+");
@@ -196,13 +214,13 @@ void HobotCodec::check_params()
   }
   
   if (input_framerate_ <= 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
     "Invalid input_framerate: %d! The input_framerate must be a positive integer! "
     "Use '30' instead!", input_framerate_);
     input_framerate_ = 30;
   }
   if (output_framerate_ <=0 && output_framerate_ != -1) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
     "Invalid output_framerate: %d! The output_framerate must be a positive integer or '-1'! "
     "Use '-1' instead!", output_framerate_);
     output_framerate_ = -1;
@@ -582,6 +600,8 @@ void HobotCodec::in_hbmemh264_topic_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
+  check_image_size(msg->width, msg->height,in_sub_topic_);
+
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
       __func__, in_format_.c_str(), msg->encoding.data());
@@ -615,6 +635,8 @@ void HobotCodec::in_hbmem_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+
+  check_image_size(msg->width, msg->height,in_sub_topic_);
 
   std::stringstream ss;
   ss << "in_hbmem_topic_cb img: " << msg->encoding.data()
@@ -689,6 +711,7 @@ void HobotCodec::in_ros_h26x_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+  check_image_size(msg->width, msg->height,in_sub_topic_);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -734,6 +757,7 @@ void HobotCodec::in_ros_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+  check_image_size(msg->width, msg->height,in_sub_topic_);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -829,6 +853,16 @@ void HobotCodec::in_ros_compressed_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+
+  static int img_msg_size = img_msg->data.size();
+  if(img_msg_size != img_msg->data.size())
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
+              " receive size: %d, original size: %d", 
+              in_sub_topic_.c_str(),
+              img_msg->data.size(),
+              img_msg_size);
+  }
 
   std::stringstream ss;
   ss << "Recv compressed img: " << img_msg->format

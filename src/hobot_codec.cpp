@@ -91,23 +91,6 @@ int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
   return 0;
 }
 
-/*判断codec接收到的图片与之前图片size是否发生变化，如果发生变化会输出error log*/
-void HobotCodec::check_image_size(int rec_width,int rec_height)
-{
-  if(ori_width == -1 && ori_height == -1) { // 值为-1代表第一次接收到图片
-    ori_width = rec_width;
-    ori_height = rec_height;
-  } else if(ori_width != rec_width || ori_height != rec_height) { // 后续接收到的图片size与之前的不同
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
-              " received image width: %d height: %d, the original width: %d height: %d", 
-              in_sub_topic_.c_str(),
-              rec_width,
-              rec_height,
-              ori_width,
-              ori_height);
-  }
-}
-
 void HobotCodec::get_params()
 {
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
@@ -196,6 +179,20 @@ void HobotCodec::check_params()
     "'h264' and 'h265' are supported. "
     "Please check the out_format parameter.", out_format_.c_str());
     rclcpp::shutdown();
+  }
+
+  if(IsType(in_format_.c_str(), enc_types, 4)) {
+    if(!IsType(out_format_.c_str(), raw_types,3)) { // 输入为编码格式，输出必须为raw格式
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+        "%s cannot be encoded to %s", in_format_.c_str(), out_format_.c_str());
+      rclcpp::shutdown();
+    }
+  } else if(IsType(in_format_.c_str(), raw_types,3)) {
+    if(!IsType(out_format_.c_str(), enc_types, 4)) { // 输入为raw格式，输出必须为编码格式
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+        "%s cannot be encoded to %s", in_format_.c_str(), out_format_.c_str());
+      rclcpp::shutdown();
+    }
   }
 
   if (IsType(out_format_.c_str(), enc_types, 4)) {
@@ -600,8 +597,6 @@ void HobotCodec::in_hbmemh264_topic_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
-  check_image_size(msg->width, msg->height);
-
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
       __func__, in_format_.c_str(), msg->encoding.data());
@@ -635,8 +630,6 @@ void HobotCodec::in_hbmem_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-
-  check_image_size(msg->width, msg->height);
 
   std::stringstream ss;
   ss << "in_hbmem_topic_cb img: " << msg->encoding.data()
@@ -711,7 +704,6 @@ void HobotCodec::in_ros_h26x_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-  check_image_size(msg->width, msg->height);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -757,7 +749,6 @@ void HobotCodec::in_ros_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-  check_image_size(msg->width, msg->height);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -853,18 +844,6 @@ void HobotCodec::in_ros_compressed_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-
-  /*判断codec接收到的CompressedImage图片size是否发生变化，如果发生变化输出error log*/
-  if(-1 == CompressedImage_size)
-  { // 第一次接收图片
-    CompressedImage_size = img_msg->data.size();
-  } else if(CompressedImage_size != img_msg->data.size()) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
-              " receive size: %d, original size: %d", 
-              in_sub_topic_.c_str(),
-              img_msg->data.size(),
-              CompressedImage_size);
-  }
 
   std::stringstream ss;
   ss << "Recv compressed img: " << img_msg->format

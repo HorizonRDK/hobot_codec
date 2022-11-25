@@ -148,21 +148,6 @@ class HobotCodec : public rclcpp::Node {
   rclcpp::TimerBase::SharedPtr get_timer; //每隔5s检查一次codec获取image的时间
   void on_get_timer();
 
-  // 用于记录和比较codec每次接收到image的尺寸，第一次接收到image时赋值
-  int ori_width = -1; //第一次接收到的图片宽
-  int ori_height = -1; //第一次接收到的图片高
-
-  /**
- * 判断codec接收到的图片size是否发生变化，如果发生变化会输出error log
- * @param[in] rec_width: codec接收到的图片宽
- * @param[in] rec_height: codec接收到的图片宽
- * @return void */
-  void check_image_size(int rec_width,int rec_height);
-
-  // 用于保存CompressedImage格式的图片size
-  // CompressedImage格式获取不到宽高，只有图片数据的size
-  int CompressedImage_size = -1;
-
  private:
   HWCodec *m_pHwCodec = nullptr;
   uint8_t *mPtrInNv12 = nullptr;

@@ -131,8 +131,16 @@ int HobotVenc::child_start(int nPicWidth, int nPicHeight) {
     int opt = 0;
     if (enCT_START == m_nCodecSt) {
         // 增加鲁棒性测试，由于可能没设置 ROS_DOMAIN_ID，可能会收到不同分辨率，不同分辨率直接失败不处理
-        if (m_nPicWidth != nPicWidth || m_nPicHeight != nPicHeight)
+        if (m_nPicWidth != nPicWidth || m_nPicHeight != nPicHeight) {
+            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+                         "Received image size has changed! "
+                         " received image width: %d height: %d, the original width: %d height: %d",
+                          nPicWidth,
+                          nPicHeight,
+                          m_nPicWidth,
+                          m_nPicHeight);
             return -1;
+        }
         return 0;
     }
     m_nPicWidth = nPicWidth;

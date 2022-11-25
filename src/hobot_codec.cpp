@@ -37,24 +37,6 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
   return nRetMs;
 }
 
-void check_image_size(int rec_width,int rec_height,std::string &in_sub_topic_)
-{
-  static int ori_width = -1;
-  static int ori_height = -1;
-  if(ori_width == -1 && ori_height == -1) {
-    ori_width = rec_width;
-    ori_height = rec_height;
-  } else if(ori_width != rec_width || ori_height != rec_height) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
-              " received image width: %d height: %d, the original width: %d height: %d", 
-              in_sub_topic_.c_str(),
-              rec_width,
-              rec_height,
-              ori_width,
-              ori_height);
-  }
-}
-
 void TestSave(char *pFilePath, char *imgData, int nDlen)
 {
   FILE *yuvFd = fopen(pFilePath, "w+");
@@ -108,6 +90,24 @@ int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
   }
   return 0;
 }
+
+/*判断codec接收到的图片与之前图片size是否发生变化，如果发生变化会输出error log*/
+void HobotCodec::check_image_size(int rec_width,int rec_height)
+{
+  if(ori_width == -1 && ori_height == -1) { // 值为-1代表第一次接收到图片
+    ori_width = rec_width;
+    ori_height = rec_height;
+  } else if(ori_width != rec_width || ori_height != rec_height) { // 后续接收到的图片size与之前的不同
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
+              " received image width: %d height: %d, the original width: %d height: %d", 
+              in_sub_topic_.c_str(),
+              rec_width,
+              rec_height,
+              ori_width,
+              ori_height);
+  }
+}
+
 void HobotCodec::get_params()
 {
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
@@ -600,7 +600,7 @@ void HobotCodec::in_hbmemh264_topic_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
-  check_image_size(msg->width, msg->height,in_sub_topic_);
+  check_image_size(msg->width, msg->height);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -636,7 +636,7 @@ void HobotCodec::in_hbmem_topic_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
-  check_image_size(msg->width, msg->height,in_sub_topic_);
+  check_image_size(msg->width, msg->height);
 
   std::stringstream ss;
   ss << "in_hbmem_topic_cb img: " << msg->encoding.data()
@@ -711,7 +711,7 @@ void HobotCodec::in_ros_h26x_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-  check_image_size(msg->width, msg->height,in_sub_topic_);
+  check_image_size(msg->width, msg->height);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -757,7 +757,7 @@ void HobotCodec::in_ros_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
-  check_image_size(msg->width, msg->height,in_sub_topic_);
+  check_image_size(msg->width, msg->height);
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "[%s]->infmt err %s-%s",
@@ -854,14 +854,16 @@ void HobotCodec::in_ros_compressed_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
-  static int img_msg_size = img_msg->data.size();
-  if(img_msg_size != img_msg->data.size())
-  {
+  /*判断codec接收到的CompressedImage图片size是否发生变化，如果发生变化输出error log*/
+  if(-1 == CompressedImage_size)
+  { // 第一次接收图片
+    CompressedImage_size = img_msg->data.size();
+  } else if(CompressedImage_size != img_msg->data.size()) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "Received image size has changed! topicName: %s"
               " receive size: %d, original size: %d", 
               in_sub_topic_.c_str(),
               img_msg->data.size(),
-              img_msg_size);
+              CompressedImage_size);
   }
 
   std::stringstream ss;

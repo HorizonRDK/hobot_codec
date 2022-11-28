@@ -178,7 +178,20 @@ int HobotVdec::child_start(int nPicWidth, int nPicHeight) {
     if (-1 == nPicWidth || -1 == nPicHeight)
         return 0;
     if (enCT_START == m_nCodecSt)
+    {
+        // 不同分辨率直接失败不处理
+        if (m_nPicWidth != nPicWidth || m_nPicHeight != nPicHeight) {
+            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+                         "Received image size has changed! "
+                         " received image width: %d height: %d, the original width: %d height: %d",
+                          nPicWidth,
+                          nPicHeight,
+                          m_nPicWidth,
+                          m_nPicHeight);
+            return -1;
+        }
         return 0;
+    }
     m_nPicWidth = nPicWidth;
     m_nPicHeight = nPicHeight;
     // 初始化VP

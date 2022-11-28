@@ -1,5 +1,11 @@
 # Changelog for package hobot_codec
 
+tros_1.1.3rc1 (2022-11-25)
+------------------
+1. 添加codec接收图片尺寸发生变化的error log。
+2. 更改codec模块参数input_format和output_format参数设置错误log等级。
+3. 解决源码中编解码格式未做拦截，导致转换的图片不可用的问题。
+
 tros_1.1.3 (2022-11-15)
 ------------------
 1. 优化hobot_codec输出日志

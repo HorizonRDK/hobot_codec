@@ -90,6 +90,7 @@ int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
   }
   return 0;
 }
+
 void HobotCodec::get_params()
 {
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
@@ -149,6 +150,7 @@ void HobotCodec::check_params()
         "Invalid channel number: %d! 0~3 are supported, "
         "please check the channel parameter.", mChannel_);
     rclcpp::shutdown();
+    return;
   }
   
   if (!IsType(in_mode_.c_str(), in_mode, 2)) {
@@ -156,6 +158,7 @@ void HobotCodec::check_params()
     "Invalid in_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the in_mode parameter.", in_mode_.c_str());
     rclcpp::shutdown();
+    return;
   }
   
   if (!IsType(out_mode_.c_str(), out_mode, 2)) {
@@ -163,6 +166,7 @@ void HobotCodec::check_params()
     "Invalid out_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the out_mode parameter.", out_mode_.c_str());
     rclcpp::shutdown();
+    return;
   }
   
   if (!IsType(in_format_.c_str(), in_format, 6)) {
@@ -170,6 +174,7 @@ void HobotCodec::check_params()
     "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'h264' "
     "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
     rclcpp::shutdown();
+    return;
   }
   
   if (!IsType(out_format_.c_str(), out_format, 7)) {
@@ -178,6 +183,23 @@ void HobotCodec::check_params()
     "'h264' and 'h265' are supported. "
     "Please check the out_format parameter.", out_format_.c_str());
     rclcpp::shutdown();
+    return;
+  }
+
+  if(IsType(in_format_.c_str(), enc_types, 4)) {
+    if(!IsType(out_format_.c_str(), raw_types,3)) { // 输入为编码格式，输出必须为raw格式
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+        "%s cannot be decoded to %s", in_format_.c_str(), out_format_.c_str());
+      rclcpp::shutdown();
+      return;
+    }
+  } else if(IsType(in_format_.c_str(), raw_types,3)) {
+    if(!IsType(out_format_.c_str(), enc_types, 4)) { // 输入为raw格式，输出必须为编码格式
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+        "%s cannot be encoded to %s", in_format_.c_str(), out_format_.c_str());
+      rclcpp::shutdown();
+      return;
+    }
   }
 
   if (IsType(out_format_.c_str(), enc_types, 4)) {
@@ -186,23 +208,25 @@ void HobotCodec::check_params()
       "Invalid enc_qp: %f! The value range is floating point number from 0 to 100."
       " Please check the enc_qp parameter.", enc_qp_);
       rclcpp::shutdown();
+      return;
     }
     if (jpg_quality_ < 0 || jpg_quality_ > 100) {
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
       "Invalid jpg_quality: %f! The value range is floating point number from 0 to 100."
       " Please check the jpg_quality parameter.", jpg_quality_);
       rclcpp::shutdown();
+      return;
     }
   }
   
   if (input_framerate_ <= 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
     "Invalid input_framerate: %d! The input_framerate must be a positive integer! "
     "Use '30' instead!", input_framerate_);
     input_framerate_ = 30;
   }
   if (output_framerate_ <=0 && output_framerate_ != -1) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
+    RCLCPP_WARN(rclcpp::get_logger("HobotCodec"),
     "Invalid output_framerate: %d! The output_framerate must be a positive integer or '-1'! "
     "Use '-1' instead!", output_framerate_);
     output_framerate_ = -1;
@@ -214,6 +238,7 @@ void HobotCodec::check_params()
     input_framerate_,
     output_framerate_);
     rclcpp::shutdown();
+    return;
   }
 }
 

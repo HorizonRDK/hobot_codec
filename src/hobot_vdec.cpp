@@ -220,21 +220,94 @@ int HobotVdec::child_start(int nPicWidth, int nPicHeight) {
     RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "HB_VDEC_Module_Init: %d end.\n", s32Ret);
     return 0;
 }
-typedef enum
-{
-    H264_GET_NALU_TYPE  = 0x1F,   // 按位与提取NALU类型的掩码位
-    H264_I_FRAME        = 0x05,
-    H264_P_FRAME        = 0x01,
-    H264_SPS_FRAME      = 0x07,
-    H264_PPS_FRAME      = 0x08,
-    H264_SEI_FRAME      = 0x06,
-    H265_GET_NALU_TYPE  = 0x7E,   // 按位与提取NALU类型的掩码位
-    H265_I_FRAME        = 0x26,
-    H265_SS_FRAME       = 0x02,
-    H265_VPS_FRAME      = 0x40,
-    H265_SPS_FRAME      = 0x42,
-    H265_PPS_FRAME      = 0x44,
-}ENUM_NaluType;
+
+// 按位与提取NALU类型的掩码位
+#define H264_GET_NALU_TYPE 0x1F
+// 原始的Nal数据
+// H264_I_FRAME        = 0x05,
+// H264_P_FRAME        = 0x01,
+// H264_SPS_FRAME      = 0x07,
+// H264_PPS_FRAME      = 0x08,
+// H264_SEI_FRAME      = 0x06,
+  
+// 按位与提取NALU类型的掩码位
+#define H265_GET_NALU_TYPE 0x7E
+// 原始的Nal数据
+// H265_I_FRAME        = 0x26,
+// H265_I_N_LP_FRAME   = 0x28,
+// H265_SS_FRAME       = 0x02,
+// H265_VPS_FRAME      = 0x40,
+// H265_SPS_FRAME      = 0x42,
+// H265_PPS_FRAME      = 0x44,
+// H265_SEI_FRAME      = 0x4E,
+
+// H264定义的nal数据标志：https://github.com/cisco/openh264/blob/master/codec/api/wels/codec_def.h
+// 转换方法：NalUnitType = (NalFrameval & H264_GET_NALU_TYPE);
+enum class NalUnitTypeH264 {
+  NAL_UNKNOWN     = 0,
+  NAL_SLICE       = 1,
+  NAL_SLICE_DPA   = 2,
+  NAL_SLICE_DPB   = 3,
+  NAL_SLICE_DPC   = 4,
+  NAL_SLICE_IDR   = 5,      ///< ref_idc != 0
+  NAL_SEI         = 6,      ///< ref_idc == 0
+  NAL_SPS         = 7,
+  NAL_PPS         = 8
+                    ///< ref_idc == 0 for 6,9,10,11,12
+};
+
+// H265定义的nal数据标志：https://github.com/strukturag/libde265/blob/master/libde265/nal.h
+// 转换方法：NalUnitType = (NalFrameval & H265_GET_NALU_TYPE) >> 1;
+enum class NalUnitTypeH265 {
+  NAL_UNIT_TRAIL_N = 0,
+  NAL_UNIT_TRAIL_R = 1,
+  NAL_UNIT_TSA_N = 2,
+  NAL_UNIT_TSA_R = 3,
+  NAL_UNIT_STSA_N = 4,
+  NAL_UNIT_STSA_R = 5,
+  NAL_UNIT_RADL_N = 6,
+  NAL_UNIT_RADL_R = 7,
+  NAL_UNIT_RASL_N = 8,
+  NAL_UNIT_RASL_R = 9,
+  NAL_UNIT_RESERVED_VCL_N10 = 10,
+  NAL_UNIT_RESERVED_VCL_N12 = 12,
+  NAL_UNIT_RESERVED_VCL_N14 = 14,
+  NAL_UNIT_RESERVED_VCL_R11 = 11,
+  NAL_UNIT_RESERVED_VCL_R13 = 13,
+  NAL_UNIT_RESERVED_VCL_R15 = 15,
+  NAL_UNIT_BLA_W_LP = 16,     // BLA = broken link access
+  NAL_UNIT_BLA_W_RADL = 17,
+  NAL_UNIT_BLA_N_LP = 18,
+  NAL_UNIT_IDR_W_RADL = 19,
+  NAL_UNIT_IDR_N_LP = 20,
+  NAL_UNIT_CRA_NUT = 21,     // CRA = clean random access
+  NAL_UNIT_RESERVED_IRAP_VCL22 = 22,
+  NAL_UNIT_RESERVED_IRAP_VCL23 = 23,
+  NAL_UNIT_RESERVED_VCL24 = 24,
+  NAL_UNIT_RESERVED_VCL25 = 25,
+  NAL_UNIT_RESERVED_VCL26 = 26,
+  NAL_UNIT_RESERVED_VCL27 = 27,
+  NAL_UNIT_RESERVED_VCL28 = 28,
+  NAL_UNIT_RESERVED_VCL29 = 29,
+  NAL_UNIT_RESERVED_VCL30 = 30,
+  NAL_UNIT_RESERVED_VCL31 = 31,
+  NAL_UNIT_VPS_NUT = 32,
+  NAL_UNIT_SPS_NUT = 33,
+  NAL_UNIT_PPS_NUT = 34,
+  NAL_UNIT_AUD_NUT = 35,
+  NAL_UNIT_EOS_NUT = 36,
+  NAL_UNIT_EOB_NUT = 37,
+  NAL_UNIT_FD_NUT = 38,
+  NAL_UNIT_PREFIX_SEI_NUT = 39,
+  NAL_UNIT_SUFFIX_SEI_NUT = 40,
+  NAL_UNIT_RESERVED_NVCL41 = 41,
+  NAL_UNIT_RESERVED_NVCL42 = 42,
+  NAL_UNIT_RESERVED_NVCL43 = 43,
+  NAL_UNIT_RESERVED_NVCL44 = 44,
+  NAL_UNIT_RESERVED_NVCL45 = 45,
+  NAL_UNIT_RESERVED_NVCL46 = 46,
+  NAL_UNIT_RESERVED_NVCL47 = 47,
+};
 
 int findH26xNalu(const unsigned char* p_pszData, int p_nDataLen, unsigned char* p_pszNaluType, int *nNalLen)
 {
@@ -290,44 +363,59 @@ int findSPSPPSVPS(int p_nStreamType, const unsigned char* p_pszFrameData, int p_
         nNalLen = findH26xNalu(pCheckMem, nLeftData,
             &nNaluType[nNaluNum], &nNaluLen[nNaluNum]);
         if (nNalLen < 0) {
-            break;
+          break;
         }
         nStartCodePos[nNaluNum] = (pCheckMem - p_pszFrameData);
         pCheckMem += nNaluLen[nNaluNum];
         nLeftData -= nNaluLen[nNaluNum];
-        // RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[findSPSPPSVPS]->type=%d,naLen=%d,start=%d, nalNum=%d.\n",
-        //   nNaluType[nNaluNum],nNaluLen[nNaluNum],nStartCodePos[nNaluNum], nNaluNum);
+        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+          "[findSPSPPSVPS]->type=%d, naLen=%d, start=%d, nalNum=%d",
+          nNaluType[nNaluNum], nNaluLen[nNaluNum], nStartCodePos[nNaluNum], nNaluNum);
         ++nNaluNum;
     } while (1);
+
     // 根据nNaluType来输出
     for (int i = 0; i < nNaluNum; i++) {
-        if (PT_H264 == p_nStreamType)
-            nNaluType[i] = nNaluType[i] & H264_GET_NALU_TYPE;
-        else if (PT_H265 == p_nStreamType)
-            nNaluType[i] = nNaluType[i] & H265_GET_NALU_TYPE;
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+        "[findSPSPPSVPS] input nNaluType[%d]: %x", i, nNaluType[i]);
+    
+      if (PT_H264 == p_nStreamType)
+          nNaluType[i] = nNaluType[i] & H264_GET_NALU_TYPE;
+      else if (PT_H265 == p_nStreamType)
+          nNaluType[i] = (nNaluType[i] & H265_GET_NALU_TYPE) >> 1;
 
-        switch (nNaluType[i]) {
-        case H264_SPS_FRAME:
-        case H265_SPS_FRAME:
+      RCLCPP_INFO(rclcpp::get_logger("HobotCodec"),
+        "[findSPSPPSVPS] after convert nNaluType[%d]: %x", i, nNaluType[i]);
+    
+      switch (nNaluType[i]) {
+        // todo 2023/1/10 帧类型的判断方法应该参考官方给出的方法
+        // H264：https://github.com/cisco/openh264/blob/master/codec/api/wels/codec_def.h
+        // H265：https://github.com/strukturag/libde265/blob/master/libde265/nal.h
+        case static_cast<int>(NalUnitTypeH264::NAL_SPS):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_SPS_NUT):
             *p_pnSPS = nStartCodePos[i];
             *p_pnSPSLen = nNaluLen[i];
             break;  // SPS
-        case H264_PPS_FRAME:
-        case H265_PPS_FRAME:
+        case static_cast<int>(NalUnitTypeH264::NAL_PPS):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_PPS_NUT):
             *p_pnPPS = nStartCodePos[i];
             *p_pnPPSLen = nNaluLen[i];
             break;  // PPS
-        case 0x06:
-            break;  // H264 SEI
-        case H265_VPS_FRAME:
+        case static_cast<int>(NalUnitTypeH264::NAL_SEI):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_PREFIX_SEI_NUT):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_SUFFIX_SEI_NUT):
+            break;  // SEI
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_VPS_NUT):
             *p_pnVPS = nStartCodePos[i];
             *p_pnVPSLen = nNaluLen[i];
             break;  // VPS
-        case H264_I_FRAME:
-        case H265_I_FRAME:
+        case static_cast<int>(NalUnitTypeH264::NAL_SLICE_IDR):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_IDR_W_RADL):
+        case static_cast<int>(NalUnitTypeH265::NAL_UNIT_IDR_N_LP):
+            // 查找到I帧
             return nStartCodePos[i];  // success
             break;  // I
-        }
+      }
     }
     return -1;
 }
@@ -359,10 +447,14 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
                     fclose(outFile);
                     s_sTest = 1;
                 }*/
+
                 int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
                     nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
-                if (nSPSLen <= 0) {
-                    return -1;
+                if (nSPSLen <= 0 || nIFramePos < 0) {
+                  RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "findSPSPPSVPS fail. ret: %d, nSPSLen: %d, nLen: %d",
+                      nIFramePos, nSPSLen, nLen);
+                      rclcpp::shutdown();
+                  return -1;
                 }
                 m_bFirstDec = 0;
             }

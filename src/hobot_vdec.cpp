@@ -451,7 +451,7 @@ int HobotVdec::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &
                 int nIFramePos = findSPSPPSVPS(m_enPalType, pDataIn,
                     nLen, &nSPSPos, &nPPSPos, &nVPSPos, &nSPSLen, &nPPSLen, &nVPSLen, 4);
                 if (nSPSLen <= 0 || nIFramePos < 0) {
-                  RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "findSPSPPSVPS fail. ret: %d, nSPSLen: %d, nLen: %d",
+                  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "findSPSPPSVPS fail. ret: %d, nSPSLen: %d, nLen: %d",
                       nIFramePos, nSPSLen, nLen);
                   return -1;
                 }

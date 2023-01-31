@@ -16,13 +16,12 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <thread>
+#include <memory>
+
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
-
-#ifndef INCLUDE_HOBOT_CODEC_H_
-#define INCLUDE_HOBOT_CODEC_H_
-
 #include "img_msgs/msg/h26_x_frame.hpp"
 
 #ifdef SHARED_MEM_MSG
@@ -30,45 +29,22 @@
 #include "hbm_img_msgs/msg/hbm_h26_x_frame.hpp"
 #endif
 
-#include <thread>
-#include <memory>
+#include "include/hobot_codec_impl.h"
 
-#include "include/arrqueue.hpp"
-#include "include/hwcodec.h"
-
-typedef struct _tag_RecvImg {
-  int mWidth;
-  int mHeight;
-  unsigned char* mPImgData;
-  unsigned int mDataLen;
-  char encoding[12];
-  struct timespec time_stamp;
-}TRecvImg;
-#define FIFO_NUM 20
-// #define THRD_CODEC_PUT
-
-using rclcpp::NodeOptions;
-using ImgCbType =
-  std::function<void(const sensor_msgs::msg::Image::ConstSharedPtr &msg)>;
+#ifndef INCLUDE_HOBOT_CODEC_NODE_H_
+#define INCLUDE_HOBOT_CODEC_NODE_H_
 
 // 即是接收端，又是发布端，接收，传编解码器，得到结果pub，帧率？
-class HobotCodec : public rclcpp::Node {
+class HobotCodecNode : public rclcpp::Node {
  public:
-  explicit HobotCodec(const rclcpp::NodeOptions & node_options = NodeOptions(), std::string node_name = "hobot_codec");
-  ~HobotCodec();
+  explicit HobotCodecNode(const rclcpp::NodeOptions & node_options = rclcpp::NodeOptions(),
+  std::string node_name = "hobot_codec");
+  ~HobotCodecNode();
 
  private:
   int init();
-  std::shared_ptr<std::thread> m_spThrdPub;
-  void exec_loopPub();
-#ifdef THRD_CODEC_PUT
-  std::shared_ptr<std::thread> m_spThrdPut;
-  void exec_loopPut();
-  CArrayQueue<TRecvImg, FIFO_NUM> m_arrRecvImg;
-  /*TRecvImg m_arrRecvImg[FIFO_NUM];
-  unsigned int m_nTotalSubNum;
-  unsigned int m_nCurPut;*/
-#endif
+  std::shared_ptr<std::thread> m_spThrdPub = nullptr;
+  void exec_loopPub(bool is_sharedmem_pub);
   /*
   接收，普通是 ROS image 格式；发布都是 image 格式，share mem 采用hbmmsg 格式
   */
@@ -98,19 +74,16 @@ class HobotCodec : public rclcpp::Node {
   void in_hbmem_topic_cb(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
   void in_hbmemh264_topic_cb(const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg);
 #endif
-  // ImgCbType img_cb_ = nullptr;
-  // ----------------------------------------------------------------- sub end
-  // ----------------------------------------------------------------- pub begin
   // shared image message
-  sensor_msgs::msg::Image::UniquePtr img_pub_;
-  sensor_msgs::msg::CompressedImage::UniquePtr compressed_img_pub_;
+  sensor_msgs::msg::Image::UniquePtr img_pub_ = nullptr;
+  sensor_msgs::msg::CompressedImage::UniquePtr compressed_img_pub_ = nullptr;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr ros_image_publisher_ = nullptr;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr ros_compressed_image_publisher_ = nullptr;
 
 #ifdef SHARED_MEM_MSG
-  rclcpp::TimerBase::SharedPtr timer_hbmem_;
-  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr hbmem_publisher_;
-  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr h264hbmem_publisher_;
+  rclcpp::TimerBase::SharedPtr timer_hbmem_ = nullptr;
+  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr hbmem_publisher_ = nullptr;
+  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr h264hbmem_publisher_ = nullptr;
 #endif
   void timer_ros_pub();
   void timer_hbmem_pub();
@@ -118,7 +91,7 @@ class HobotCodec : public rclcpp::Node {
   void get_params();
   //检查启动参数是否符合要求，不符合要求会输出error log，并退出进程
   void check_params();
-  rclcpp::TimerBase::SharedPtr timer_pub_;
+  rclcpp::TimerBase::SharedPtr timer_pub_ = nullptr;
 
   // ----------------------------------------------------------------- pub end
   // 订阅主题，进行转换并发布
@@ -133,6 +106,8 @@ class HobotCodec : public rclcpp::Node {
   int mChannel_ = 0;
   float enc_qp_ = 10.0;
   float jpg_quality_ = 10.0;
+  bool dump_output_ = false;
+  std::string dump_output_file_ = "dump_codec_output";
 
   std::chrono::high_resolution_clock::time_point sub_imgraw_tp_;
   int sub_imgraw_frameCount_ = 0;
@@ -149,20 +124,11 @@ class HobotCodec : public rclcpp::Node {
   void on_get_timer();
 
  private:
-  HWCodec *m_pHwCodec = nullptr;
+  std::shared_ptr<HobotCodecImpl> sp_hobot_codec_impl_ = nullptr;
+  std::shared_ptr<HobotCodecParaBase> sp_hobot_codec_data_info_ = nullptr;
+  
   uint8_t *mPtrInNv12 = nullptr;
   uint8_t *mPtrOutRGB2 = nullptr;
-#ifdef THRD_CODEC_PUT
-  // tool
-  void put_compressedimg_frame(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
-  void put_rosimg_frame(const sensor_msgs::msg::Image::ConstSharedPtr msg);
-  void put_rosh26x_frame(const img_msgs::msg::H26XFrame::ConstSharedPtr msg);
-
-#ifdef SHARED_MEM_MSG
-  void put_hbm_frame(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
-  void put_hbmh264_frame(const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg);
-#endif
-#endif
 };
 
-#endif  // INCLUDE_HOBOT_CODEC_H_
+#endif  // INCLUDE_HOBOT_CODEC_NODE_H_

@@ -13,20 +13,22 @@
 // limitations under the License.
 
 #include <string>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <list>
+#include <thread>
 #include <memory>
-
 #include "rclcpp/rclcpp.hpp"
-#include "include/hobot_codec_node.h"
 
-// ros2 run hobot_codec hobot_codec_republish ros jpeg decompress sub_topic:=/image_raw/compressed
-// pub_topic:=/image_raw rgb8
-int main(int argc, char** argv) {
-  rclcpp::init(argc, argv);
+#include "include/hobot_codec_data.h"
+#include "include/hobot_codec_base.h"
 
-  std::string node_name = "hobot_codec_" + std::to_string(getpid());
-  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "This is HobotCodecNode: %s.", node_name.data());
-  rclcpp::spin(std::make_shared<HobotCodecNode>(rclcpp::NodeOptions(), node_name));
-  rclcpp::shutdown();
-  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "HobotCodecNode: %s exit.", node_name.data());
+int HobotCodecBase::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para) {
+  if (!sp_hobot_codec_para) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodecBase"), "Invalid input");
+    return -1;
+  }
   return 0;
 }
+  

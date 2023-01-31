@@ -16,42 +16,70 @@
 #include <functional>
 #include <memory>
 
-#include "include/hwcodec.h"
+#include "include/hobot_codec_base.h"
+
+#include "vio/hb_comm_venc.h"
+#include "vio/hb_venc.h"
+#include "vio/hb_vio_interface.h"
+#include "vio/hb_sys.h"
+#include "vio/hb_vdec.h"
+#include "vio/hb_vp_api.h"
 
 #ifndef INCLUDE_HOBOT_VENC_H_
 #define INCLUDE_HOBOT_VENC_H_
-class HobotVenc : public HWCodec {
- public:
-  HobotVenc(int channel, const char *type);
-  ~HobotVenc();
-  virtual int InitCodec();
-  virtual int UninitCodec();
-  virtual int PutData(const uint8_t *pDataIn, int nLen,
-    const struct timespec &time_stamp);
-  virtual int GetFrame(TFrameData *pOutFrm);
-  virtual int ReleaseFrame(TFrameData *pFrame);
 
-  int SetFps(int VeChn, int InputFps, int OutputFps);
-  virtual void SetCodecAttr(const char* tsName, float fVal);
+// 缓存数量
+#define BUF_CNT 5
+
+class HobotVenc : public HobotCodecBase {
+ public:
+  HobotVenc();
+  ~HobotVenc();
+  int Init(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para) override;
+  int DeInit() override;
+  int Start(int nPicWidth, int nPicHeight) override;
+  int Stop() override;
+  int Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int nLen,
+            const struct timespec &time_stamp) override;
+  int GetOutput(std::shared_ptr<OutputFrameDataType> pFrame) override;
+  int ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame) override;
 
  protected:
-  virtual int child_start(int nPicWidth, int nPicHeight);
-  virtual int child_stop();
+  int CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para) override;
+
+ protected:
+  pthread_mutex_t m_lckInit;
+  pthread_cond_t m_condInit;
+
+  // 内存管理
+  uint64_t m_arrMMZ_PAddr[BUF_CNT];
+  char* m_arrMMZ_VAddr[BUF_CNT];
+  uint32_t m_tmLastPush = 0;  // 上次 push 的时间
+  int m_nMMZCnt = BUF_CNT;
+  int m_nUseCnt = 0;  // push 个数
+  int m_nGetCnt = 0;  // 读取个数
+  int m_nMMZidx = 0;
+
 
  private:
-  int Create(int nVW, int nVH, int bits);
   int init_venc();
   int chnAttr_init();
   int venc_setRcParam(int bitRate);
+  CodecImgFormat ConvertPalType(const PAYLOAD_TYPE_E& pal_type);
+
   VENC_CHN_ATTR_S m_oVencChnAttr;
   VIDEO_STREAM_S m_curGetStream;
+
+  PAYLOAD_TYPE_E m_enPalType; /*the attribute of gop*/
+  CodecImgFormat frame_fmt_ = CodecImgFormat::FORMAT_INVALID;
 
   float m_fJpgQuality;
   float m_fEncQp;
 
   std::shared_ptr<std::thread> m_spThrdInit;
-  // std::atomic<bool> stop_;
-  int exec_init();
+  
+  // 真正的初始化，Start中获取到输入分辨率后进行
+  int FormalInit();
 
   // VENC_CHN m_oVeChn;
   int VencChnAttrInit(VENC_CHN_ATTR_S *pVencChnAttr, PAYLOAD_TYPE_E p_enType,

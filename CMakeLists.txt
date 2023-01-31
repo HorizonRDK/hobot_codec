@@ -49,9 +49,43 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(img_msgs REQUIRED)
 
+# x3|j5|x86
+set(PREFIX_PATH x3)
+
+if(PLATFORM_X3)
+  message("build platform X3")
+  add_definitions(-DPLATFORM_X3)
+  set(PREFIX_PATH x3)
+elseif(PLATFORM_J5)
+  message("build platform J5")
+  add_definitions(-DPLATFORM_J5)
+  set(PREFIX_PATH j5)
+elseif(PLATFORM_X86)
+  message("build platform X86")
+  add_definitions(-DPLATFORM_X86)
+  set(PREFIX_PATH x86)
+  message("THIRD_PARTY is " ${THIRD_PARTY})
+  include_directories(
+    /usr/include/
+    ${THIRD_PARTY}/usr/include/
+  )
+  link_directories(
+    /lib/
+    ${THIRD_PARTY}/usr/lib/hbbpu/
+  )
+else()
+  message("invalid platform, build platform X3 default")
+  add_definitions(-DPLATFORM_X3)
+  set(PREFIX_PATH x3)
+endif()
+
+message("PREFIX_PATH: ${PREFIX_PATH}")
+
 include_directories(include
-${PROJECT_SOURCE_DIR}
-${CMAKE_SYSROOT}/usr/include
+  include/encoder/${PREFIX_PATH}
+  include/decoder/${PREFIX_PATH}
+  ${PROJECT_SOURCE_DIR}
+  ${CMAKE_SYSROOT}/usr/include
 )
 
 link_directories(
@@ -59,18 +93,26 @@ link_directories(
 )
 
 add_executable(hobot_codec_republish
-src/example.cpp
-src/hobot_codec.cpp
-src/hobot_vdec.cpp
-src/hobot_venc.cpp
+  src/example.cpp
+  src/hobot_codec_node.cpp
+  src/hobot_codec_impl.cpp
+  src/hobot_codec_base.cpp
+  src/decoder/${PREFIX_PATH}/hobot_vdec.cpp
+  src/encoder/${PREFIX_PATH}/hobot_venc.cpp
 )
 
-set(BASE_LIBRARIES pthread vio dl)
-set(X3_HAPI_LIB isp_algo z hbmedia isp ion multimedia iar tinyalsa cjson)
+set(BASE_LIBRARIES pthread dl)
+# 根据平台选择需要链接的库
+if(PLATFORM_X3)
+  set(SYS_LIB vio isp_algo z hbmedia isp ion multimedia iar tinyalsa cjson)
+elseif(PLATFORM_J5)
+  set(SYS_LIB multimedia)
+elseif(PLATFORM_X86)
+endif()
 
 #${PROJECT_NAME}
 target_link_libraries(hobot_codec_republish
-  ${BASE_LIBRARIES} ${X3_HAPI_LIB}
+  ${BASE_LIBRARIES} ${SYS_LIB}
 )
 
 if (${BUILD_HBMEM})

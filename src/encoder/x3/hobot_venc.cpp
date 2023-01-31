@@ -13,163 +13,326 @@
 // limitations under the License.
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/logging.hpp"
 
-#include "include/hobot_venc.h"
+#include "hobot_venc.h"
 // H264 H265 MJPEG
 #include "include/video_utils.hpp"
 
-HobotVenc::HobotVenc(int channel, const char *type) : HWCodec(channel, type),
-    m_fJpgQuality(0), m_fEncQp(20.0)
-{
+HobotVenc::HobotVenc() : m_fJpgQuality(0), m_fEncQp(20.0) {
 }
+
 HobotVenc::~HobotVenc() {
 }
 
-int HobotVenc::InitCodec()
-{
-    HWCodec::InitCodec();
-    return 0;
-}
-int HobotVenc::UninitCodec()
-{
-    return 0;
-}
-int HobotVenc::child_stop()
-{
-    int s32Ret;
-    if (enCT_STOP == m_nCodecSt)
-        return 0;
-    m_nCodecSt = enCT_STOP;
+int HobotVenc::Init(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para) {
+  if (!sp_hobot_codec_para || 0 != CheckParams(sp_hobot_codec_para)) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Invalid codec para");
+    return -1;
+  }
 
-    for (int i = 0; i < m_nMMZCnt; i++) {
-        s32Ret = HB_SYS_Free(m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i]);
-        if (s32Ret == 0) {
-            RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "mmzFree paddr = 0x%x, vaddr = 0x%x i = %d \n",
-              m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i], i);
-        }
+  if (strcmp(sp_hobot_codec_para->out_format_.data(), "h264") == 0)
+    m_enPalType = PT_H264;
+  else if (strcmp(sp_hobot_codec_para->out_format_.data(), "h265") == 0)
+    m_enPalType = PT_H265;
+  else if (strcmp(sp_hobot_codec_para->out_format_.data(), "jpeg") == 0 ||
+            strcmp(sp_hobot_codec_para->out_format_.data(), "jpeg-compressed") == 0)
+    m_enPalType = PT_JPEG;
+  else {
+    RCLCPP_INFO(rclcpp::get_logger("HobotVenc"), "Invalid in_format: %s",
+    sp_hobot_codec_para->in_format_.c_str());
+    return -1;
+  }
+
+  frame_fmt_ = ConvertPalType(m_enPalType);
+
+  m_fJpgQuality = sp_hobot_codec_para->jpg_quality_;
+  m_fEncQp = sp_hobot_codec_para->enc_qp_;
+  codec_chn_ = sp_hobot_codec_para->mChannel_;
+
+  return 0;
+}
+
+int HobotVenc::DeInit() {
+  int ret = Stop();
+  if (ret != 0) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Stop fail! ret: %d", ret);
+    return ret;
+  }
+  return 0;
+}
+
+int HobotVenc::Start(int nPicWidth, int nPicHeight) {
+  if (-1 == nPicWidth || -1 == nPicHeight) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Invalid input w/h");
+    return -1;
+  }
+
+  if (CodecStatType::START == codec_stat_) {
+    // 已经初始化过
+    // 不同分辨率直接失败不处理
+    if (init_pic_w_ != nPicWidth || init_pic_h_ != nPicHeight) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
+                    "Received image size has changed! "
+                    " received image width: %d height: %d, the original width: %d height: %d",
+                    nPicWidth,
+                    nPicHeight,
+                    init_pic_w_,
+                    init_pic_h_);
+      return -1;
     }
-    s32Ret = HB_VENC_StopRecvFrame(m_nCodecChn);
+    return 0;
+  } else {
+    init_pic_w_ = nPicWidth;
+    init_pic_h_ = nPicHeight;
+    if (0 != FormalInit()) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "FormalInit fail!");
+      return -1;
+    }
+  }
+
+  codec_stat_ = CodecStatType::START;
+
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "Start success");
+  return 0;
+}
+
+int HobotVenc::Stop() {
+  int s32Ret;
+  if (CodecStatType::STOP == codec_stat_)
+      return 0;
+  codec_stat_ = CodecStatType::STOP;
+
+  for (int i = 0; i < m_nMMZCnt; i++) {
+      s32Ret = HB_SYS_Free(m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i]);
+      if (s32Ret == 0) {
+          RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "mmzFree paddr = 0x%x, vaddr = 0x%x i = %d ",
+            m_arrMMZ_PAddr[i], m_arrMMZ_VAddr[i], i);
+      }
+  }
+  s32Ret = HB_VENC_StopRecvFrame(codec_chn_);
+  if (s32Ret != 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "HB_VENC_StopRecvFrame failed");
+      return -1;
+  }
+  s32Ret = HB_VENC_DestroyChn(codec_chn_);
+  if (s32Ret != 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "HB_VENC_DestroyChn failed");
+      return -1;
+  }
+  s32Ret = HB_VP_Exit();
+  if (s32Ret == 0) {
+      RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "vp exit ok!");
+  }
+  s32Ret = HB_VENC_Module_Uninit();
+  if (s32Ret) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "HB_VENC_Module_Uninit: %d", s32Ret);
+  }
+
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "Stop success");
+  return 0;
+}
+
+int HobotVenc::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int nLen, const struct timespec &time_stamp) {
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "Input data w: %d, h: %d, len: %d", nPicWidth, nPicHeight, nLen);
+
+  int ret = Start(nPicWidth, nPicHeight);
+  if (ret != 0 ) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
+      "Start codec failed!");
+    return ret;
+  }
+
+  if (CodecStatType::START != codec_stat_) {
+    RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotVenc"),
+      "Input fail! codec is not ready! codec_stat_: " << static_cast<int>(codec_stat_));
+    return -1;
+  }
+
+  // 先来获取编码
+  VIDEO_FRAME_S pstFrame;
+  memset(&pstFrame, 0, sizeof(VIDEO_FRAME_S));
+  int offset = init_pic_w_ * init_pic_h_;
+  m_nMMZidx = m_nUseCnt % m_nMMZCnt;
+
+  memcpy(reinterpret_cast<void*>(m_arrMMZ_VAddr[m_nMMZidx]), pDataIn, nLen);
+  pstFrame.stVFrame.width = init_pic_w_;
+  pstFrame.stVFrame.height = init_pic_h_;
+  pstFrame.stVFrame.size = nLen;  // init_pic_w_ * init_pic_h_ * 3 / 2;
+  pstFrame.stVFrame.pix_format = HB_PIXEL_FORMAT_NV12;
+  pstFrame.stVFrame.phy_ptr[0] = m_arrMMZ_PAddr[m_nMMZidx];
+  pstFrame.stVFrame.phy_ptr[1] = m_arrMMZ_PAddr[m_nMMZidx] + offset;
+  // pstFrame.stVFrame.phy_ptr[2] = m_arrMMZ_PAddr[m_nMMZidx] + offset * 5 / 4;
+  pstFrame.stVFrame.vir_ptr[0] = m_arrMMZ_VAddr[m_nMMZidx];
+  pstFrame.stVFrame.vir_ptr[1] = m_arrMMZ_VAddr[m_nMMZidx] + offset;
+  // pstFrame.stVFrame.vir_ptr[2] = m_arrMMZ_VAddr[m_nMMZidx] + offset * 5 / 4;
+  pstFrame.stVFrame.pts = time_stamp.tv_sec * 1000 + time_stamp.tv_nsec / 1000000;
+
+  m_nUseCnt++;  // wuwlNG
+  if (HB_VENC_SendFrame(codec_chn_, &pstFrame, 3000) != 0) {
+      return -1;
+  }
+    
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "Input success");
+  return 0;
+}
+
+int HobotVenc::GetOutput(std::shared_ptr<OutputFrameDataType> pOutFrm) {
+  if (!pOutFrm) {
+    RCLCPP_ERROR_STREAM(rclcpp::get_logger("HobotVenc"),
+      "Invalid input data!");
+    return -1;
+  }
+  int s32Ret;
+  if (CodecStatType::START == codec_stat_) {
+    s32Ret = HB_VENC_GetStream(codec_chn_, &m_curGetStream, 3000);
     if (s32Ret != 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_StopRecvFrame failed\n");
-        return -1;
+      RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotVenc"),
+        "HB_VENC_GetStream fail! s32Ret: " << s32Ret);
+      return -1;
     }
-    s32Ret = HB_VENC_DestroyChn(m_nCodecChn);
-    if (s32Ret != 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_DestroyChn failed\n");
-        return -1;
+    pOutFrm->mPtrData = reinterpret_cast<uint8_t*>(
+        m_curGetStream.pstPack.vir_ptr);
+    pOutFrm->mDataLen = m_curGetStream.pstPack.size;
+    pOutFrm->mWidth = init_pic_w_;
+    pOutFrm->mHeight = init_pic_h_;
+    pOutFrm->mFrameFmt = frame_fmt_;
+    ++m_nGetCnt;
+#ifdef TEST_SAVE
+    if (NULL == outH264File)
+        outH264File = fopen("enc.dat", "wb");
+    if (outH264File) {
+        fwrite(m_curGetStream.pstPack.vir_ptr,
+            m_curGetStream.pstPack.size, 1, outH264File);
     }
-    s32Ret = HB_VP_Exit();
-    if (s32Ret == 0) {
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "vp exit ok!\n");
-    }
-    s32Ret = HB_VENC_Module_Uninit();
-    if (s32Ret) {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_Module_Uninit: %d\n", s32Ret);
-    }
+#endif
     return 0;
+  } else {
+    RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotVenc"),
+      "GetOutput fail! codec is not ready! codec_stat_: " << static_cast<int>(codec_stat_));
+    return -1;
+  }
+  return -1;
 }
 
-int HobotVenc::exec_init()
+int HobotVenc::ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame) {
+  if (!pFrame) {
+    RCLCPP_ERROR_STREAM(rclcpp::get_logger("HobotVenc"),
+      "Invalid input data!");
+    return -1;
+  }
+
+  int s32Ret = HB_VENC_ReleaseStream(codec_chn_, &m_curGetStream);
+  m_curGetStream.pstPack.vir_ptr = NULL;
+  m_curGetStream.pstPack.size = 0;
+  if (s32Ret != 0)
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "[%s]0x%x-%dx%d,ret=%d", __func__,
+        pFrame->mPtrData, pFrame->mWidth, pFrame->mHeight, s32Ret);
+  return s32Ret;
+}
+
+int HobotVenc::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para)
 {
-    int s32Ret;
-    m_nCodecSt = 100;
-    pthread_mutex_init(&m_lckInit, NULL);
-    pthread_cond_init(&m_condInit, NULL);
+  if (!sp_hobot_codec_para) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Invalid input");
+    return -1;
+  }
 
-    s32Ret = HB_VENC_Module_Init();
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "===>HB_VENC_Module_Init: %d\n", s32Ret);
-    // 初始化VP
-    VP_CONFIG_S struVpConf;
-    memset(&struVpConf, 0x00, sizeof(VP_CONFIG_S));
-    struVpConf.u32MaxPoolCnt = 32;
-    HB_VP_SetConfig(&struVpConf);
-    s32Ret = HB_VP_Init();
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "===>vp_init s32Ret = %d !\n", s32Ret);
+  if (sp_hobot_codec_para->mChannel_ < 0 || sp_hobot_codec_para->mChannel_ > 3) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
+        "Invalid channel number: %d! 0~3 are supported, "
+        "please check the channel parameter.", sp_hobot_codec_para->mChannel_);
+    rclcpp::shutdown();
+    return -1;
+  }
 
-    if (0 != init_venc()) {
-        HB_VP_Exit();
-        HB_VENC_Module_Uninit();
-        abort();  // 直接退出
-        return -1;
-    }
-    // Create(nPicWidth, nPicHeight, 8000);
-    VENC_RECV_PIC_PARAM_S pstRecvParam;
-    pstRecvParam.s32RecvPicNum = 0;  // unchangable
+  if (sp_hobot_codec_para->enc_qp_ < 0 || sp_hobot_codec_para->enc_qp_ > 100) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
+    "Invalid enc_qp: %f! The value range is floating point number from 0 to 100."
+    " Please check the enc_qp parameter.", sp_hobot_codec_para->enc_qp_);
+    rclcpp::shutdown();
+    return -1;
+  }
+  if (sp_hobot_codec_para->jpg_quality_ < 0 || sp_hobot_codec_para->jpg_quality_ > 100) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
+    "Invalid jpg_quality: %f! The value range is floating point number from 0 to 100."
+    " Please check the jpg_quality parameter.", sp_hobot_codec_para->jpg_quality_);
+    rclcpp::shutdown();
+    return -1;
+  }
 
-    s32Ret = HB_VENC_StartRecvFrame(m_nCodecChn, &pstRecvParam);
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "VENC_StartRecvFrame chn=%d,ret=%d.\n", m_nCodecChn, s32Ret);
-    if (s32Ret != 0) {
-        abort();  // 直接退出
-        return -2;
-    }
-
-    // 准备buffer
-    int i = 0, error = 0;
-    for (i = 0; i < m_nMMZCnt; i++) {
-        m_arrMMZ_VAddr[i] = NULL;
-        m_arrMMZ_PAddr[i] = 0;
-    }
-    // memset(m_arrMMZ_PAddr, 0, sizeof(m_arrMMZ_PAddr));
-    int mmz_size = m_nPicWidth * m_nPicHeight * 3 / 2;
-    for (i = 0; i < m_nMMZCnt; i++) {
-        s32Ret = HB_SYS_Alloc(&m_arrMMZ_PAddr[i], reinterpret_cast<void **>(
-                   &m_arrMMZ_VAddr[i]), mmz_size);
-        if (s32Ret == 0) {
-            RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "mmz w:h=%d:%d, paddr=0x%x, vaddr=0x%x i = %d \n",
-                m_nPicWidth, m_nPicHeight, m_arrMMZ_PAddr[i],
-                m_arrMMZ_VAddr[i], i);
-        }
-    }
-
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]: %d end.\n", __func__, s32Ret);
-    m_nCodecSt = enCT_START;
-    return 0;
+  return 0;
 }
 
-int HobotVenc::child_start(int nPicWidth, int nPicHeight) {
-    int s32Ret;
-    int opt = 0;
-    if (enCT_START == m_nCodecSt) {
-        // 增加鲁棒性测试，由于可能没设置 ROS_DOMAIN_ID，可能会收到不同分辨率，不同分辨率直接失败不处理
-        if (m_nPicWidth != nPicWidth || m_nPicHeight != nPicHeight) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),
-                         "Received image size has changed! "
-                         " received image width: %d height: %d, the original width: %d height: %d",
-                          nPicWidth,
-                          nPicHeight,
-                          m_nPicWidth,
-                          m_nPicHeight);
-            return -1;
-        }
-        return 0;
-    }
-    m_nPicWidth = nPicWidth;
-    m_nPicHeight = nPicHeight;
-    return exec_init();
-}
-
-void HobotVenc::SetCodecAttr(const char* tsName, float fVal)
+int HobotVenc::FormalInit()
 {
-    if (0 == strcmp("jpg_quality", tsName)) {
-        m_fJpgQuality = fVal;
-    } else if (0 == strcmp("enc_qp", tsName)) {
-        m_fEncQp = fVal;
-    }
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "FormalInit start");
+
+  int s32Ret;
+  pthread_mutex_init(&m_lckInit, NULL);
+  pthread_cond_init(&m_condInit, NULL);
+
+  s32Ret = HB_VENC_Module_Init();
+  // 初始化VP
+  VP_CONFIG_S struVpConf;
+  memset(&struVpConf, 0x00, sizeof(VP_CONFIG_S));
+  struVpConf.u32MaxPoolCnt = 32;
+  HB_VP_SetConfig(&struVpConf);
+  s32Ret = HB_VP_Init();
+
+  if (0 != init_venc()) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "init_venc failed");
+      HB_VP_Exit();
+      HB_VENC_Module_Uninit();
+      abort();  // 直接退出
+      return -1;
+  }
+
+  VENC_RECV_PIC_PARAM_S pstRecvParam;
+  pstRecvParam.s32RecvPicNum = 0;  // unchangable
+
+  s32Ret = HB_VENC_StartRecvFrame(codec_chn_, &pstRecvParam);
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "VENC_StartRecvFrame chn=%d,ret=%d.", codec_chn_, s32Ret);
+  if (s32Ret != 0) {
+      abort();  // 直接退出
+      return -2;
+  }
+
+  // 准备buffer
+  int i = 0;
+  for (i = 0; i < m_nMMZCnt; i++) {
+      m_arrMMZ_VAddr[i] = NULL;
+      m_arrMMZ_PAddr[i] = 0;
+  }
+  // memset(m_arrMMZ_PAddr, 0, sizeof(m_arrMMZ_PAddr));
+  int codec_buf_size_ = init_pic_w_ * init_pic_h_ * 3 / 2;
+  for (i = 0; i < m_nMMZCnt; i++) {
+      s32Ret = HB_SYS_Alloc(&m_arrMMZ_PAddr[i], reinterpret_cast<void **>(
+                  &m_arrMMZ_VAddr[i]), codec_buf_size_);
+      if (s32Ret == 0) {
+          RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "mmz w:h=%d:%d, paddr=0x%x, vaddr=0x%x i = %d ",
+              init_pic_w_, init_pic_h_, m_arrMMZ_PAddr[i],
+              m_arrMMZ_VAddr[i], i);
+      }
+  }
+
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "[%s]: %d end.", __func__, s32Ret);
+  
+  RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "FormalInit success");
+  return 0;
 }
 
 int HobotVenc::init_venc()
 {
     int s32Ret;
-    int pts = 0;
-    int count = 0;
 
     pthread_mutex_lock(&m_lckInit);
     // 初始化channel属性
     s32Ret = chnAttr_init();
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "sample_venc_ChnAttr_init : %d\n", s32Ret);
+    RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "sample_venc_ChnAttr_init : %d", s32Ret);
     // 创建channel
-    s32Ret = HB_VENC_CreateChn(m_nCodecChn, &m_oVencChnAttr);
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "HB_VENC_CreateChn type=%d, %d , %d.\n", m_enPalType, m_nCodecChn, s32Ret);
+    s32Ret = HB_VENC_CreateChn(codec_chn_, &m_oVencChnAttr);
+    RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "HB_VENC_CreateChn type=%d, %d , %d.", m_enPalType, codec_chn_, s32Ret);
     if (s32Ret != 0) {
         return -1;
     }
@@ -178,13 +341,13 @@ int HobotVenc::init_venc()
         s32Ret = venc_setRcParam(8000);
     else
         s32Ret = venc_setRcParam(3000);
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "sample_venc_setRcParam ret: %d\n", s32Ret);
+    RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "sample_venc_setRcParam ret: %d", s32Ret);
 
     // 设置channel属性
-    s32Ret = HB_VENC_SetChnAttr(m_nCodecChn, &m_oVencChnAttr);  // config
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "HB_VENC_SetChnAttr ret=%d.\n", s32Ret);
+    s32Ret = HB_VENC_SetChnAttr(codec_chn_, &m_oVencChnAttr);  // config
+    RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "HB_VENC_SetChnAttr ret=%d.", s32Ret);
     if (s32Ret != 0) {
-        HB_VENC_DestroyChn(m_nCodecChn);
+        HB_VENC_DestroyChn(codec_chn_);
         pthread_mutex_unlock(&m_lckInit);
         return -1;
     }
@@ -192,92 +355,8 @@ int HobotVenc::init_venc()
     pthread_mutex_unlock(&m_lckInit);
     return 0;
 }
-// nv12
-static int s_enctest = 0;
-
-int HobotVenc::PutData(const uint8_t *pDataIn, int nLen, const struct timespec &time_stamp) {
-    int s32Ret;
-    if (enCT_START == m_nCodecSt) {
-        // 先来获取编码
-        // m_MtxLstFrames.lock();
-        uint32_t tmNow = video_utils::GetTickCount();
-        VIDEO_FRAME_S pstFrame = { 0 };  // 至关重要，有些变量要初始赋值为 0(false)
-        int offset = m_nPicWidth * m_nPicHeight;
-        m_nMMZidx = m_nUseCnt % m_nMMZCnt;
-
-        memcpy(reinterpret_cast<void*>(m_arrMMZ_VAddr[m_nMMZidx]), pDataIn, nLen);
-        pstFrame.stVFrame.width = m_nPicWidth;
-        pstFrame.stVFrame.height = m_nPicHeight;
-        pstFrame.stVFrame.size = nLen;  // m_nPicWidth * m_nPicHeight * 3 / 2;
-        pstFrame.stVFrame.pix_format = HB_PIXEL_FORMAT_NV12;
-        pstFrame.stVFrame.phy_ptr[0] = m_arrMMZ_PAddr[m_nMMZidx];
-        pstFrame.stVFrame.phy_ptr[1] = m_arrMMZ_PAddr[m_nMMZidx] + offset;
-        // pstFrame.stVFrame.phy_ptr[2] = m_arrMMZ_PAddr[m_nMMZidx] + offset * 5 / 4;
-        pstFrame.stVFrame.vir_ptr[0] = m_arrMMZ_VAddr[m_nMMZidx];
-        pstFrame.stVFrame.vir_ptr[1] = m_arrMMZ_VAddr[m_nMMZidx] + offset;
-        // pstFrame.stVFrame.vir_ptr[2] = m_arrMMZ_VAddr[m_nMMZidx] + offset * 5 / 4;
-
-        pstFrame.stVFrame.pts = tmNow;
-        m_nUseCnt++;  // wuwlNG
-        s32Ret = HB_VENC_SendFrame(m_nCodecChn, &pstFrame, 3000);
-        if (s32Ret != 0) {
-            return -1;
-        }
-        HWCodec::PutData(pDataIn, nLen, time_stamp);
-        // usleep(50*1000);
-        // 可能需要保存编码的结果，因为 扔进去的 太快了，扔之前，先读取一下，保存起来，给获取的使用。
-        return 0;
-    }
-    return -100;
-}
 
 FILE *outH264File = NULL;  // fopen("enc.jpg", "wb");
-int HobotVenc::ReleaseFrame(TFrameData *pFrame)
-{
-    if (pFrame) {
-        // VIDEO_STREAM_S pstStreamInfo;
-        // pstStreamInfo.pstPack.vir_ptr = (hb_char*)pFrame->mPtrData;
-        int s32Ret = HB_VENC_ReleaseStream(m_nCodecChn, &m_curGetStream);
-        m_curGetStream.pstPack.vir_ptr = NULL;
-        m_curGetStream.pstPack.size = 0;
-        if (s32Ret != 0)
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "[%s]0x%x-%dx%d,ret=%d\n", __func__,
-                pFrame->mPtrData, pFrame->mWidth, pFrame->mHeight, s32Ret);
-        return s32Ret;
-    }
-    return 0;
-}
-
-int HobotVenc::GetFrame(TFrameData *pOutFrm) {
-    int s32Ret;
-    if (enCT_START == m_nCodecSt) {
-        if (-1 == HWCodec::GetFrame(pOutFrm))
-            return -1;
-        s32Ret = HB_VENC_GetStream(m_nCodecChn, &m_curGetStream, 3000);
-        if (s32Ret != 0) {
-            usleep(10000);
-            return -1;
-        }
-        pOutFrm->mPtrData = reinterpret_cast<uint8_t*>(
-            m_curGetStream.pstPack.vir_ptr);
-        pOutFrm->mDataLen = m_curGetStream.pstPack.size;
-        pOutFrm->mWidth = m_nPicWidth;
-        pOutFrm->mHeight = m_nPicHeight;
-        pOutFrm->mFrameFmt = m_enPalType;
-        ++m_nGetCnt;
-#ifdef TEST_SAVE
-        if (NULL == outH264File)
-            outH264File = fopen("enc.dat", "wb");
-        if (outH264File) {
-            fwrite(m_curGetStream.pstPack.vir_ptr,
-                m_curGetStream.pstPack.size, 1, outH264File);
-        }
-#endif
-        return 0;
-    }
-    return -100;
-}
-
 int HobotVenc::chnAttr_init() {
     int streambufSize = 0;
     // 该步骤必不可少
@@ -285,8 +364,8 @@ int HobotVenc::chnAttr_init() {
     // 设置编码模型分别为 PT_H264 PT_H265 PT_MJPEG
     m_oVencChnAttr.stVencAttr.enType = m_enPalType;
     // 设置编码分辨率
-    m_oVencChnAttr.stVencAttr.u32PicWidth = m_nPicWidth;
-    m_oVencChnAttr.stVencAttr.u32PicHeight = m_nPicHeight;
+    m_oVencChnAttr.stVencAttr.u32PicWidth = init_pic_w_;
+    m_oVencChnAttr.stVencAttr.u32PicHeight = init_pic_h_;
     // 设置像素格式 NV12格式
     m_oVencChnAttr.stVencAttr.enPixelFormat = HB_PIXEL_FORMAT_NV12;
     // 配置图像镜像属性 无镜像
@@ -296,15 +375,15 @@ int HobotVenc::chnAttr_init() {
     // 配置图像剪裁属性 不剪裁
     m_oVencChnAttr.stVencAttr.stCropCfg.bEnable = HB_FALSE;
     // 输入图像大小 1024对齐
-    streambufSize = (m_nPicWidth * m_nPicHeight * 3 / 2 + 1024) & ~0x3ff;
+    streambufSize = (init_pic_w_ * init_pic_h_ * 3 / 2 + 1024) & ~0x3ff;
     // vlc_buf_size为经验值，可以减少RAM使用，如果想使用默认值则保持为0
-    if (m_nPicWidth * m_nPicHeight > 2688 * 1522) {
+    if (init_pic_w_ * init_pic_h_ > 2688 * 1522) {
         m_oVencChnAttr.stVencAttr.vlc_buf_size = 7900 * 1024;
-    } else if (m_nPicWidth * m_nPicHeight > 1920 * 1080) {
+    } else if (init_pic_w_ * init_pic_h_ > 1920 * 1080) {
         m_oVencChnAttr.stVencAttr.vlc_buf_size = 4 * 1024 * 1024;
-    } else if (m_nPicWidth * m_nPicHeight > 1280 * 720) {
+    } else if (init_pic_w_ * init_pic_h_ > 1280 * 720) {
         m_oVencChnAttr.stVencAttr.vlc_buf_size = 2100 * 1024;
-    } else if (m_nPicWidth * m_nPicHeight > 704 * 576) {
+    } else if (init_pic_w_ * init_pic_h_ > 704 * 576) {
         m_oVencChnAttr.stVencAttr.vlc_buf_size = 2100 * 1024;
     } else {
         m_oVencChnAttr.stVencAttr.vlc_buf_size = 2048 * 1024;
@@ -364,7 +443,7 @@ int HobotVenc::chnAttr_init() {
     m_oVencChnAttr.stGopAttr.u32GopPresetIdx = 2;
     // 设置IDR帧类型
     m_oVencChnAttr.stGopAttr.s32DecodingRefreshType = 2;
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->rc=%d, vlcSz=%d, streamSz=%d, cur=%d.\n",
+    RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "[%s]->rc=%d, vlcSz=%d, streamSz=%d, cur=%d.",
         __func__, m_oVencChnAttr.stRcAttr.enRcMode,
         m_oVencChnAttr.stVencAttr.vlc_buf_size,
         m_oVencChnAttr.stVencAttr.u32BitStreamBufSize, m_enPalType);
@@ -379,9 +458,9 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         // 为什么之前是VBR 这里改为CBR 之前的VBR是必须的吗？
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
-        s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
+        s32Ret = HB_VENC_GetRcParam(codec_chn_, pstRcParam);
         if (s32Ret != 0) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_GetRcParam failed.\n");
+            RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "HB_VENC_GetRcParam failed.");
             return -1;
         }
         // 设置码率
@@ -392,15 +471,15 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         pstRcParam->stH264Cbr.u32IntraPeriod = 30;
         // 设置VbvBufferSize，与码率、解码器速率有关，一般在1000～5000
         pstRcParam->stH264Cbr.u32VbvBufferSize = 3000;
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->h264 enRcMode=%d, u32VbvBufSz=%d, bitRate=%d\n",
+        RCLCPP_INFO(rclcpp::get_logger("HobotVenc"), "[%s]->h264 enRcMode=%d, u32VbvBufSz=%d, bitRate=%d",
             __func__, m_oVencChnAttr.stRcAttr.enRcMode,
             m_oVencChnAttr.stRcAttr.stH264Cbr.u32VbvBufferSize, bitRate);
     } else if (m_oVencChnAttr.stVencAttr.enType == PT_H265) {
         pstRcParam = &(m_oVencChnAttr.stRcAttr);
         m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
-        s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
+        s32Ret = HB_VENC_GetRcParam(codec_chn_, pstRcParam);
         if (s32Ret != 0) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_GetRcParam failed.\n");
+            RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "HB_VENC_GetRcParam failed.");
             return -1;
         }
         // 设置码率
@@ -411,7 +490,7 @@ int HobotVenc::venc_setRcParam(int bitRate) {
         pstRcParam->stH265Cbr.u32IntraPeriod = 30;
         // 设置VbvBufferSize，与码率、解码器速率有关，一般在1000～5000
         pstRcParam->stH265Cbr.u32VbvBufferSize = 3000;
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->h265 enRMode=%d, u32VbvBufSz=%d, bitRate=%d \n",
+        RCLCPP_INFO(rclcpp::get_logger("HobotVenc"), "[%s]->h265 enRMode=%d, u32VbvBufSz=%d, bitRate=%d ",
             __func__, m_oVencChnAttr.stRcAttr.enRcMode,
             m_oVencChnAttr.stRcAttr.stH265Cbr.u32VbvBufferSize, bitRate);
     }
@@ -487,107 +566,6 @@ int HobotVenc::VencChnAttrInit(VENC_CHN_ATTR_S *pVencChnAttr,
     pVencChnAttr->stGopAttr.u32GopPresetIdx = 2;
     pVencChnAttr->stGopAttr.s32DecodingRefreshType = 2;
 
-    return 0;
-}
-int HobotVenc::Create(int width, int height, int bits)
-{
-    int s32Ret;
-    VENC_RC_ATTR_S *pstRcParam;
-    VENC_PARAM_MOD_S stModParam;
-    m_nPicWidth = width;
-    m_nPicHeight = height;
-
-    VencChnAttrInit(&m_oVencChnAttr, m_enPalType,
-      width, height, HB_PIXEL_FORMAT_NV12);
-
-    s32Ret = HB_VENC_CreateChn(m_nCodecChn, &m_oVencChnAttr);
-    if (s32Ret != 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_Chn %d failed, %d.\n", m_nCodecChn, s32Ret);
-        return -1;
-    }
-    if (m_enPalType == PT_H264) {
-        pstRcParam = &(m_oVencChnAttr.stRcAttr);
-        s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
-        if (s32Ret != 0) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_GetRcParam failed.\n");
-            return -1;
-        }
-        switch (m_oVencChnAttr.stRcAttr.enRcMode) {
-        case VENC_RC_MODE_H264CBR:
-            venc_h264cbr(pstRcParam, bits, 30, 30, 3000);
-            break;
-        case VENC_RC_MODE_H264VBR:
-            venc_h264vbr(pstRcParam, 30, 30, 30);
-            break;
-        case VENC_RC_MODE_H264AVBR:
-            venc_h264avbr(pstRcParam, bits, 30, 30, 3000);
-            break;
-        case VENC_RC_MODE_H264FIXQP:
-            venc_h264fixqp(pstRcParam, 30, 30, 0, 0, 0);
-            break;
-        case VENC_RC_MODE_H264QPMAP:
-            venc_h264qpmap(pstRcParam, 30, 30);
-            break;
-        default:
-            break;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), " m_oVencChnAttr.stRcAttr.enRcMode = %d\n",
-                m_oVencChnAttr.stRcAttr.enRcMode);
-    } else if (m_enPalType == PT_H265) {
-        pstRcParam = &(m_oVencChnAttr.stRcAttr);
-        m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
-        s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
-        if (s32Ret != 0) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_GetRcParam failed.\n");
-            return -1;
-        }
-        switch (m_oVencChnAttr.stRcAttr.enRcMode) {
-        case VENC_RC_MODE_H265CBR:
-            venc_h265cbr(pstRcParam, bits, 30, 30, 3000);
-            break;
-        case VENC_RC_MODE_H265VBR:
-            venc_h265vbr(pstRcParam, 30, 30, 30);
-            break;
-        case VENC_RC_MODE_H265AVBR:
-            venc_h265avbr(pstRcParam, bits, 30, 30, 3000);
-            break;
-        case VENC_RC_MODE_H265FIXQP:
-            venc_h265fixqp(pstRcParam, 30, 30, 0, 0, 0);
-            break;
-        case VENC_RC_MODE_H265QPMAP:
-            venc_h265qpmap(pstRcParam, 30, 30);
-        default:
-            break;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), " m_VencChnAttr.stRcAttr.enRcMode = %d\n",
-                m_oVencChnAttr.stRcAttr.enRcMode);
-    } else if (m_enPalType == PT_MJPEG) {
-        pstRcParam = &(m_oVencChnAttr.stRcAttr);
-        m_oVencChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_MJPEGFIXQP;
-        s32Ret = HB_VENC_GetRcParam(m_nCodecChn, pstRcParam);
-        if (s32Ret != 0) {
-            RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_GetRcParam failed.\n");
-            return -1;
-        }
-        venc_mjpgfixqp(pstRcParam, 30, 50);
-    }
-    s32Ret = HB_VENC_SetChnAttr(m_nCodecChn, &m_oVencChnAttr);  // config
-    if (s32Ret != 0) {
-        RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"), "HB_VENC_SetChnAttr failed\n");
-        return -1;
-    }
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->suc chn=%d,ret=%d.\n", __func__, m_nCodecChn, s32Ret);
-
-    return 0;
-}
-int HobotVenc::SetFps(int m_nCodecChn, int InputFps, int OutputFps)
-{
-    VENC_CHN_PARAM_S chnparam;
-
-    HB_VENC_GetChnParam(m_nCodecChn, &chnparam);
-    chnparam.stFrameRate.s32InputFrameRate = InputFps;
-    chnparam.stFrameRate.s32OutputFrameRate = OutputFps;
-    HB_VENC_SetChnParam(m_nCodecChn, &chnparam);
     return 0;
 }
 
@@ -770,6 +748,23 @@ int HobotVenc::venc_mjpgfixqp(VENC_RC_ATTR_S *pstRcParam, int framerate,
 {
     pstRcParam->stMjpegFixQp.u32FrameRate = framerate;
     pstRcParam->stMjpegFixQp.u32QualityFactort = quality;
-    RCLCPP_INFO(rclcpp::get_logger("HobotCodec"), "[%s]->fps=%d, quality=%d.\n", __func__, framerate, quality);
+    RCLCPP_INFO(rclcpp::get_logger("HobotVenc"), "[%s]->fps=%d, quality=%d.", __func__, framerate, quality);
     return 0;
+}
+
+CodecImgFormat HobotVenc::ConvertPalType(const PAYLOAD_TYPE_E& pal_type) {
+  CodecImgFormat format = CodecImgFormat::FORMAT_INVALID;
+  if (PT_H264 == m_enPalType) {
+    format = CodecImgFormat::FORMAT_H264;
+  } else if (PT_H265 == m_enPalType) {
+    format = CodecImgFormat::FORMAT_H265;
+  } else if (PT_JPEG == m_enPalType) {
+    format = CodecImgFormat::FORMAT_JPEG;
+  } else if (PT_MJPEG == m_enPalType) {
+    format = CodecImgFormat::FORMAT_MJPEG;
+  } else {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "ConvertPalType fail! Unknown pal_type: %d", pal_type);
+  }
+
+  return format;
 }

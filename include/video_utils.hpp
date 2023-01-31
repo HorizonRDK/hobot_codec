@@ -22,40 +22,6 @@
 
 namespace video_utils
 {
-inline uint32_t GetTickCount()
-{
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);  // CLOCK_MONOTONIC
-  return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-}
-
-inline void monotonicToRealTime(const timespec & monotonic_time, timespec * real_time)
-{
-  struct timespec real_sample1, real_sample2, monotonic_sample;
-
-  // otherwise what if there is a delay/interruption between sampling the times?
-  clock_gettime(CLOCK_REALTIME, &real_sample1);
-  clock_gettime(CLOCK_MONOTONIC, &monotonic_sample);
-  clock_gettime(CLOCK_REALTIME, &real_sample2);
-
-  timespec time_diff;
-  time_diff.tv_sec = real_sample2.tv_sec - monotonic_sample.tv_sec;
-  time_diff.tv_nsec = real_sample2.tv_nsec - monotonic_sample.tv_nsec;
-
-  // This isn't available outside of the kernel
-  // real_time = timespec_add(monotonic_time, time_diff);
-  const int64_t NSEC_PER_SEC = 1000000000;
-  real_time->tv_sec = monotonic_time.tv_sec + time_diff.tv_sec;
-  real_time->tv_nsec = monotonic_time.tv_nsec + time_diff.tv_nsec;
-  if (real_time->tv_nsec >= NSEC_PER_SEC) {
-    ++real_time->tv_sec;
-    real_time->tv_nsec -= NSEC_PER_SEC;
-  } else if (real_time->tv_nsec < 0) {
-    --real_time->tv_sec;
-    real_time->tv_nsec += NSEC_PER_SEC;
-  }
-}
-
 const uint8_t Y_SUBS[8] = { 16, 16, 16, 16, 16, 16, 16, 16 };
 const uint8_t UV_SUBS[8] = { 128, 128, 128, 128, 128, 128, 128, 128 };
 inline void NV12_TO_BGR24(unsigned char *_src, unsigned char* pUv, unsigned char *_RGBOut, int width, int height) {
@@ -77,7 +43,6 @@ inline void NV12_TO_BGR24(unsigned char *_src, unsigned char* pUv, unsigned char
 
   // int width2 = width >> 1;
   int width3 = (width << 2) - width;
-  int width9 = (width << 3) + width;
   unsigned char *RGBOut1 = RGBOut;
   unsigned char *RGBOut2 = RGBOut1 + width3;
   // unsigned char *RGBOut1 = RGBOut + 3 * width * (height - 2);
@@ -169,7 +134,6 @@ inline void NV12_TO_RGB24(unsigned char *_src, unsigned char* pUv, unsigned char
   uint8x8_t UV_SUBvec = vld1_u8(UV_SUBS);
 
   int width3 = (width << 2) - width;
-  int width9 = (width << 3) + width;
   unsigned char *RGBOut1 = RGBOut;
   unsigned char *RGBOut2 = RGBOut1 + width3;
   unsigned char tempUV[8];

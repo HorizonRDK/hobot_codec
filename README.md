@@ -100,49 +100,64 @@ ros2 run hobot_codec hobot_codec_republish
 | jpg_quality      | jpeg 编码质量                | 浮点数 0-100                                  | 60.0                  |
 | input_framerate  | 输入帧率，实际送数据帧率     | 正整数                                        | 30                    |
 | output_framerate | 输出帧率，仅编码模式支持配置 | 正整数，小于等于输入帧率                      | -1（不开启帧率控制）  |
+| dump_output      | 存储编解码输出配置            | True存储，False不存储                          | False                 |
 
 ### 注意：
 
     由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
 
-运行方式1，命令方式：
-解码 jpeg 测试：
-```
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
-// 先用获取的 mipi_cam 的数据进行 jpeg 编码
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
+运行方式1，命令方式。
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=jpeg -p out_mode:=ros -p out_format:=rgb8 -p sub_topic:=/image_jpeg -p pub_topic:=/image_raw_nv12
-```
-编码 jpeg 测试：
-```
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
-
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
-
-#share memory
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg
-```
-编码jpeg，发布compressed格式消息，并设置输出帧率：
-
+1. 订阅NV12格式图片，测试编码并存储编码后的图片/视频：
 ~~~shell
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
+# mipi摄像头通过零拷贝发布NV12格式图片
+ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg-compressed -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg/compressed -p output_framerate:=20
+# 编码成jpeg
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=True
+
+# 编码成h264
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h264 -p sub_topic:=/hbmem_img -p dump_output:=True
+
+# 编码成h265
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p dump_output:=True
 ~~~
 
-编解码 h264 测试：
+2. 订阅H264视频，解码出NV12格式图片并存储：
+~~~shell
+# 解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=True
 
-```
-ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12
+# 图像发布工具发布h264视频
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.h264 -p image_format:=h264
+~~~
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=h264 -p sub_topic:=/image_raw -p pub_topic:=/image_h264
+3. 订阅H265视频，解码出NV12格式图片并存储：
+~~~shell
+# 解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=True
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=h264 -p out_mode:=ros -p out_format:=nv12 -p sub_topic:=/image_h264 -p pub_topic:=/image_nv12
-```
+# 图像发布工具发布h265视频
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/sky.h265 -p image_format:=h265
+~~~
+
+4. 订阅NV12格式图片，编码成JPEG图片后再解码成NV12格式并存储：
+~~~shell
+# mipi摄像头发布NV12格式图片
+ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
+
+# 编码成jpeg
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg -p dump_output:=False
+
+# 订阅jpeg图片，解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=True
+~~~
+
+
 运行方式2，使用launch文件启动：
-`ros2 launch install/share/hobot_codec/launch/hobot_codec.launch.py`
-
+`ros2 launch hobot_codec hobot_codec.launch.py`
 
 ## X3 linaro系统
 

@@ -299,8 +299,61 @@ int HobotVenc::FormalInit() {
   params->frame_cropping_flag = false;
   params->width = init_pic_w_;
   params->height = init_pic_h_;
+  params->external_frame_buf = false;
+  int ret = 0;
+  if (CodecImgFormat::FORMAT_H265 == frame_fmt_) {
+    params->rc_params.mode = MC_AV_RC_MODE_H265CBR;
+    ret = hb_mm_mc_get_rate_control_config(context_, &params->rc_params);
+    if (ret != 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "hb_mm_mc_get_rate_control_config failed, ret: 0x%x", ret);
+      return ret;
+    }
+    params->rc_params.h265_cbr_params.intra_period = 20;
+    params->rc_params.h265_cbr_params.intra_qp = 8;
+    params->rc_params.h265_cbr_params.bit_rate = 200;
+    params->rc_params.h265_cbr_params.frame_rate = 15;
+    params->rc_params.h265_cbr_params.initial_rc_qp = 20;
+    params->rc_params.h265_cbr_params.vbv_buffer_size = 20;
+    params->rc_params.h265_cbr_params.ctu_level_rc_enalbe = 1;
+    params->rc_params.h265_cbr_params.min_qp_I = 8;
+    params->rc_params.h265_cbr_params.max_qp_I = 30;
+    params->rc_params.h265_cbr_params.min_qp_P = 8;
+    params->rc_params.h265_cbr_params.max_qp_P = 30;
+    params->rc_params.h265_cbr_params.min_qp_B = 8;
+    params->rc_params.h265_cbr_params.max_qp_B = 30;
+    params->rc_params.h265_cbr_params.hvs_qp_enable = 1;
+    params->rc_params.h265_cbr_params.hvs_qp_scale = 2;
+    params->rc_params.h265_cbr_params.max_delta_qp = 10;
+    params->rc_params.h265_cbr_params.qp_map_enable = 0;
+    params->gop_params.decoding_refresh_type = 2;
+    params->gop_params.gop_preset_idx = 2;
+  } else if (CodecImgFormat::FORMAT_H264 == frame_fmt_) {
+    params->rc_params.mode = MC_AV_RC_MODE_H264CBR;
+    ret = hb_mm_mc_get_rate_control_config(context_, &params->rc_params);
+    if (ret != 0) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "hb_mm_mc_get_rate_control_config failed, ret: 0x%x", ret);
+      return ret;
+    }
+    params->rc_params.h264_cbr_params.intra_period = 30;
+    params->rc_params.h264_cbr_params.intra_qp = 30;
+    params->rc_params.h264_cbr_params.bit_rate = 5000;
+    params->rc_params.h264_cbr_params.frame_rate = 30;
+    params->rc_params.h264_cbr_params.initial_rc_qp = 20;
+    params->rc_params.h264_cbr_params.vbv_buffer_size = 20;
+    params->rc_params.h264_cbr_params.mb_level_rc_enalbe = 1;
+    params->rc_params.h264_cbr_params.min_qp_I = 8;
+    params->rc_params.h264_cbr_params.max_qp_I = 50;
+    params->rc_params.h264_cbr_params.min_qp_P = 8;
+    params->rc_params.h264_cbr_params.max_qp_P = 50;
+    params->rc_params.h264_cbr_params.min_qp_B = 8;
+    params->rc_params.h264_cbr_params.max_qp_B = 50;
+    params->rc_params.h264_cbr_params.hvs_qp_enable = 1;
+    params->rc_params.h264_cbr_params.hvs_qp_scale = 2;
+    params->rc_params.h264_cbr_params.max_delta_qp = 10;
+    params->rc_params.h264_cbr_params.qp_map_enable = 0;
+  }
 
-  int ret = hb_mm_mc_initialize(context_);
+  ret = hb_mm_mc_initialize(context_);
   if (ret != 0) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "hb_mm_mc_initialize failed, ret: 0x%x", ret);
     return ret;

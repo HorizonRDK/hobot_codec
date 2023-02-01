@@ -81,9 +81,6 @@ class HobotVenc : public HobotCodecBase {
   // 真正的初始化，Start中获取到输入分辨率后进行
   int FormalInit();
 
-  // VENC_CHN m_oVeChn;
-  int VencChnAttrInit(VENC_CHN_ATTR_S *pVencChnAttr, PAYLOAD_TYPE_E p_enType,
-            int p_Width, int p_Height, PIXEL_FORMAT_E pixFmt);
   int venc_h264cbr(VENC_RC_ATTR_S *pstRcParam, int bits,
         int framerate, int intraperiod, int vbvbuf);
   int venc_h264vbr(VENC_RC_ATTR_S *pstRcParam, int intraperiod,

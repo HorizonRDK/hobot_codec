@@ -65,6 +65,7 @@ elseif(PLATFORM_X86)
   add_definitions(-DPLATFORM_X86)
   set(PREFIX_PATH x86)
   message("THIRD_PARTY is " ${THIRD_PARTY})
+  find_package(OpenCV REQUIRED)
   include_directories(
     /usr/include/
     ${THIRD_PARTY}/usr/include/
@@ -108,6 +109,7 @@ if(PLATFORM_X3)
 elseif(PLATFORM_J5)
   set(SYS_LIB multimedia)
 elseif(PLATFORM_X86)
+  set(SYS_LIB ${OpenCV_LIBS})
 endif()
 
 #${PROJECT_NAME}

@@ -15,13 +15,27 @@
 #ifndef INCLUDE_VIDEO_UTILS_HPP_
 #define INCLUDE_VIDEO_UTILS_HPP_
 
+#ifndef PLATFORM_X86
+
 #include <arm_neon.h>
 #include <sys/ioctl.h>
 #include <cstring>
 #include <sstream>
 
+#else
+
+#include "opencv2/core/mat.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/imgproc/types_c.h"
+
+#include <immintrin.h>
+#endif
+
 namespace video_utils
 {
+#ifndef PLATFORM_X86
+
 const uint8_t Y_SUBS[8] = { 16, 16, 16, 16, 16, 16, 16, 16 };
 const uint8_t UV_SUBS[8] = { 128, 128, 128, 128, 128, 128, 128, 128 };
 inline void NV12_TO_BGR24(unsigned char *_src, unsigned char* pUv, unsigned char *_RGBOut, int width, int height) {
@@ -429,5 +443,62 @@ inline void BGR24_to_NV12(const unsigned char* pRGB, unsigned char* pNV12, int w
         }
     }
 }
+
+#else
+inline void NV12_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height * 3 / 2, width, CV_8UC1, (void*)DataIn);
+  cv::Mat bgr_mat;
+  cv::cvtColor(src, bgr_mat, CV_YUV2BGR_NV12);
+  memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void RGB24_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  cv::Mat bgr_mat;
+  cv::cvtColor(src, bgr_mat, CV_RGB2BGR);
+  memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void BGR24_to_RGB24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  cv::Mat rgb_mat;
+  cv::cvtColor(src, rgb_mat, CV_BGR2RGB);
+  memcpy(DataOut, rgb_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void BGR24_to_NV12(const uint8_t *DataIn, uint8_t *DataOut, int width, int height)
+{
+  cv::Mat img_nv12;
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  if (height % 2 || width % 2) {
+    RCLCPP_ERROR(rclcpp::get_logger("hobot_codec"),
+          "[%s]: Image height and width must aligned by 2\n"
+          "height: %d \nwidth: %d", __func__, height, width);
+  }
+  cv::Mat yuv_mat(height * 3 / 2, width, CV_8UC1);
+  cv::cvtColor(src, yuv_mat, CV_BGR2YUV_I420);
+
+  int32_t y_size = height * width;
+  int32_t uv_height = height / 2;
+  int32_t uv_width = width / 2;
+
+  img_nv12 = cv::Mat(height * 3 / 2, width, CV_8UC1);
+  auto nv12_ptr = img_nv12.ptr<uint8_t>();
+  if (yuv_mat.data == nullptr) {
+    RCLCPP_ERROR(rclcpp::get_logger("hobot_codec"),
+      "[%s]: yuv_mat.data is null pointer", __func__);
+  }
+  auto yuv_ptr = yuv_mat.ptr<uint8_t>();
+  memcpy(nv12_ptr, yuv_ptr, y_size);
+  uint8_t *nv12_uv = nv12_ptr + y_size;
+  uint8_t *u_data = yuv_ptr + y_size;
+  uint8_t *v_data = u_data + uv_height * uv_width;
+  for (int32_t i = 0; i < uv_width * uv_height; i++) {
+    *nv12_uv++ = *u_data++;
+    *nv12_uv++ = *v_data++;
+  }
+  memcpy(DataOut, img_nv12.ptr<uint8_t>(), height * width * 3 / 2);
+}
+#endif
 }  // namespace video_utils
 #endif  // INCLUDE_VIDEO_UTILS_HPP_

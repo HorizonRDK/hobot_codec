@@ -14,21 +14,13 @@
 
 #include "include/hobot_codec_base.h"
 
-#ifndef INCLUDE_HOBOT_VDEC_H_
-#define INCLUDE_HOBOT_VDEC_H_
+#ifndef INCLUDE_HOBOT_VENC_H_
+#define INCLUDE_HOBOT_VENC_H_
 
-// typedef enum{
-//   PT_H265 = 0,
-//   PT_H264 = 1,
-//   PT_JPEG = 2,
-//   PT_MJPEG = 3,
-//   PT_BGR = 4
-// } CODEC_TYPE;
-
-class HobotVdec : public HobotCodecBase {
+class HobotVenc : public HobotCodecBase {
  public:
-  HobotVdec() {}
-  ~HobotVdec();
+  HobotVenc() {}
+  ~HobotVenc();
   int Init(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_para) override;
   int DeInit() override;
   int Start(int nPicWidth, int nPicHeight) override;
@@ -46,15 +38,18 @@ class HobotVdec : public HobotCodecBase {
   CodecImgFormat m_enPalType; /*the attribute of gop*/
   CodecImgFormat frame_fmt_ = CodecImgFormat::FORMAT_INVALID;
   OutputFrameDataType m_transformData;
-  uint8_t * m_DataTmp = nullptr;
   bool m_status = false;
-  std::mutex          m_MtxFrame;
+  uint8_t * m_DataTmp = nullptr;
+  std::mutex m_MtxFrame;
+	float m_fJpgQuality;
+	float m_fEncQp;
   
  protected:
 
+  // 内存管理
   uint32_t m_tmLastPush = 0;  // 上次 push 的时间
   int m_nUseCnt = 0;  // push 个数
   int m_nGetCnt = 0;  // 读取个数
 };
 
-#endif  // INCLUDE_HOBOT_VDEC_H_
+#endif  // INCLUDE_HOBOT_VENC_H_

@@ -108,25 +108,35 @@ ros2 run hobot_codec hobot_codec_republish
 
 运行方式1，命令方式。
 
-1. 订阅NV12格式图片，测试编码并存储编码后的图片/视频：
+1. 订阅MIPI摄像头发布的NV12格式图片，编码成JPEG图片并存储编码后的图片：
 ~~~shell
-# mipi摄像头通过零拷贝发布NV12格式图片
+# MIPI摄像头通过零拷贝发布NV12格式图片
 ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
 
-# 编码成jpeg
+# 编码成JPEG
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=True
+~~~
+
+2. 订阅图像发布工具发布的NV12格式图片，测试编码：
+~~~shell
+# 图像发布工具发布NV12格式图片
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p source_image_w:=960 -p source_image_h:=544
+
+# 编码成jpeg
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 编码成h264
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h264 -p sub_topic:=/hbmem_img -p dump_output:=True
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h264 -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 编码成h265
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p dump_output:=True
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p dump_output:=False
 ~~~
 
 2. 订阅H264视频，解码出NV12格式图片并存储：
 ~~~shell
 # 解码成nv12图片
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=True
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 图像发布工具发布h264视频
 cp -r /opt/tros/lib/hobot_image_publisher/config/ .
@@ -136,23 +146,21 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 3. 订阅H265视频，解码出NV12格式图片并存储：
 ~~~shell
 # 解码成nv12图片
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=True
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 图像发布工具发布h265视频
 cp -r /opt/tros/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/sky.h265 -p image_format:=h265
 ~~~
 
-4. 订阅NV12格式图片，编码成JPEG图片后再解码成NV12格式并存储：
+4. 订阅JPEG图片后解码成NV12格式：
 ~~~shell
-# mipi摄像头发布NV12格式图片
-ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
-
-# 编码成jpeg
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg -p dump_output:=False
-
 # 订阅jpeg图片，解码成nv12图片
-ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=True
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=False
+
+# 图像发布工具发布JPEG格式图片
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p is_compressed_img_pub:=True -p msg_pub_topic_name:=/image_jpeg
 ~~~
 
 

@@ -17,14 +17,6 @@
 #ifndef INCLUDE_HOBOT_VDEC_H_
 #define INCLUDE_HOBOT_VDEC_H_
 
-// typedef enum{
-//   PT_H265 = 0,
-//   PT_H264 = 1,
-//   PT_JPEG = 2,
-//   PT_MJPEG = 3,
-//   PT_BGR = 4
-// } CODEC_TYPE;
-
 class HobotVdec : public HobotCodecBase {
  public:
   HobotVdec() {}

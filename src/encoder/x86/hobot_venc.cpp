@@ -69,9 +69,8 @@ int HobotVenc::DeInit() {
 }
 
 int HobotVenc::Stop() {
-  if (CodecStatType::STOP == codec_stat_)
-      return 0;
-  codec_stat_ = CodecStatType::STOP;
+  if (CodecStatType::STOP != codec_stat_)
+      codec_stat_ = CodecStatType::STOP;
   return 0;
 }
 
@@ -142,7 +141,8 @@ int HobotVenc::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
       m_status = true;
       m_MtxFrame.unlock();
     } else {
-      RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),"Only supported JPEG");
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),"Only encoding of JPEG is supported");
+      rclcpp::shutdown();
     }
     
 	}
@@ -152,9 +152,6 @@ int HobotVenc::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
 int HobotVenc::ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame)
 {
   if (pFrame) {
-      // VIDEO_FRAME_S curFrameInfo;
-      // curFrameInfo.stVFrame.vir_ptr[0] = (hb_char*)pFrame->mPtrY;
-      // curFrameInfo.stVFrame.vir_ptr[1] = (hb_char*)pFrame->mPtrUV;
       RCLCPP_DEBUG(rclcpp::get_logger("HobotVenc"), "[%s] y: 0x%x, uv: 0x%x, w: %d, h: %d",
           __func__,
           pFrame->mPtrY, pFrame->mPtrUV, 
@@ -186,14 +183,6 @@ int HobotVenc::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_c
 {
   if (!sp_hobot_codec_para) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Invalid input");
-    return -1;
-  }
-
-  if (sp_hobot_codec_para->mChannel_ < 0 || sp_hobot_codec_para->mChannel_ > 3) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),
-        "Invalid channel number: %d! 0~3 are supported, "
-        "please check the channel parameter.", sp_hobot_codec_para->mChannel_);
-    rclcpp::shutdown();
     return -1;
   }
 

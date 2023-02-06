@@ -127,8 +127,8 @@ class HobotCodecNode : public rclcpp::Node {
   std::shared_ptr<HobotCodecImpl> sp_hobot_codec_impl_ = nullptr;
   std::shared_ptr<HobotCodecParaBase> sp_hobot_codec_data_info_ = nullptr;
   
-  uint8_t *mPtrInNv12 = nullptr;
-  uint8_t *mPtrOutRGB2 = nullptr;
+  uint8_t *mPtrIn = nullptr;
+  uint8_t *mPtrOut = nullptr;
 };
 
 #endif  // INCLUDE_HOBOT_CODEC_NODE_H_

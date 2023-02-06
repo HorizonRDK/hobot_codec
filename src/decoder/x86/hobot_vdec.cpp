@@ -57,7 +57,7 @@ int HobotVdec::Init(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_pa
 int HobotVdec::DeInit() {
   int ret = Stop();
   if (ret != 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Stop fail! ret: %d", ret);
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "Stop fail! ret: %d", ret);
     return ret;
   }
   
@@ -65,9 +65,8 @@ int HobotVdec::DeInit() {
 }
 
 int HobotVdec::Stop() {
-  if (CodecStatType::STOP == codec_stat_)
-      return 0;
-  codec_stat_ = CodecStatType::STOP;
+  if (CodecStatType::STOP != codec_stat_)
+      codec_stat_ = CodecStatType::STOP;
   return 0;
 }
 
@@ -101,7 +100,6 @@ int HobotVdec::Start(int nPicWidth, int nPicHeight) {
   return 0;
 }
 
-// 如果 h26x 数据，则有 头部处理逻辑
 int HobotVdec::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int nLen, const struct timespec &time_stamp) {
   RCLCPP_DEBUG(rclcpp::get_logger("HobotVdec"), "Input data w: %d, h: %d, len: %d", nPicWidth, nPicHeight, nLen);
 
@@ -111,7 +109,15 @@ int HobotVdec::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
       "Start codec failed!");
     return ret;
   }
-
+  if (nLen > nPicWidth * nPicHeight * 3) {
+      std::string fname = std::to_string(time_stamp.tv_sec) + "_" + std::to_string(time_stamp.tv_nsec) + ".jpeg";
+      RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),
+      "input nLen: %d exceeds alloc size: %d, dump to file: %s",
+      nLen, nPicWidth * nPicHeight * 3, fname.data());
+      std::ofstream ofs(fname);
+      ofs.write(reinterpret_cast<const char*>(pDataIn), nLen);
+      return -1;
+  }
   // 校验解码器状态
   if (CodecStatType::START != codec_stat_) {
       RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),
@@ -138,7 +144,8 @@ int HobotVdec::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
 			m_status = true;
 			m_MtxFrame.unlock();
 		} else {
-			RCLCPP_ERROR(rclcpp::get_logger("HobotCodec"),"Only supported JPEG");
+			RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),"Only decoding of JPEG is supported");
+      rclcpp::shutdown();
 		}
 	}
   return 0;
@@ -147,9 +154,6 @@ int HobotVdec::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
 int HobotVdec::ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame)
 {
   if (pFrame) {
-      // VIDEO_FRAME_S curFrameInfo;
-      // curFrameInfo.stVFrame.vir_ptr[0] = (hb_char*)pFrame->mPtrY;
-      // curFrameInfo.stVFrame.vir_ptr[1] = (hb_char*)pFrame->mPtrUV;
       RCLCPP_DEBUG(rclcpp::get_logger("HobotVdec"), "[%s] y: 0x%x, uv: 0x%x, w: %d, h: %d",
           __func__,
           pFrame->mPtrY, pFrame->mPtrUV, 
@@ -182,14 +186,6 @@ int HobotVdec::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_c
 {
   if (!sp_hobot_codec_para) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "Invalid input");
-    return -1;
-  }
-
-  if (sp_hobot_codec_para->mChannel_ < 0 || sp_hobot_codec_para->mChannel_ > 3) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),
-        "Invalid channel number: %d! 0~3 are supported, "
-        "please check the channel parameter.", sp_hobot_codec_para->mChannel_);
-    rclcpp::shutdown();
     return -1;
   }
 

@@ -109,6 +109,9 @@ elseif(PLATFORM_J5)
   set(SYS_LIB multimedia)
 elseif(PLATFORM_X86)
   set(SYS_LIB ${OpenCV_LIBS})
+else()
+  message("link platform X3 libs default")
+  set(SYS_LIB vio isp_algo z hbmedia isp ion multimedia iar tinyalsa cjson)
 endif()
 
 #${PROJECT_NAME}

@@ -65,14 +65,6 @@ elseif(PLATFORM_X86)
   set(PREFIX_PATH x86)
   message("THIRD_PARTY is " ${THIRD_PARTY})
   find_package(OpenCV REQUIRED)
-  include_directories(
-    /usr/include/
-    ${THIRD_PARTY}/usr/include/
-  )
-  link_directories(
-    /lib/
-    ${THIRD_PARTY}/usr/lib/hbbpu/
-  )
 else()
   message("invalid platform, build platform X3 default")
   add_definitions(-DPLATFORM_X3)

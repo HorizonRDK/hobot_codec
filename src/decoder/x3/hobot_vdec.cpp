@@ -45,7 +45,7 @@ int HobotVdec::Init(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_codec_pa
 int HobotVdec::DeInit() {
   int ret = Stop();
   if (ret != 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "Stop fail! ret: %d", ret);
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "Stop fail! ret: %d", ret);
     return ret;
   }
   
@@ -398,7 +398,7 @@ CodecImgFormat HobotVdec::ConvertPalType(const PAYLOAD_TYPE_E& pal_type) {
   } else if (PT_MJPEG == m_enPalType) {
     format = CodecImgFormat::FORMAT_MJPEG;
   } else {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"), "ConvertPalType fail! Unknown pal_type: %d", pal_type);
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "ConvertPalType fail! Unknown pal_type: %d", pal_type);
   }
 
   return format;

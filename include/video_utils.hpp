@@ -27,9 +27,7 @@
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
-#include "opencv2/imgproc/types_c.h"
 
-#include <immintrin.h>
 #endif
 
 namespace video_utils
@@ -448,21 +446,21 @@ inline void BGR24_to_NV12(const unsigned char* pRGB, unsigned char* pNV12, int w
 inline void NV12_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
   cv::Mat src(height * 3 / 2, width, CV_8UC1, (void*)DataIn);
   cv::Mat bgr_mat;
-  cv::cvtColor(src, bgr_mat, CV_YUV2BGR_NV12);
+  cv::cvtColor(src, bgr_mat, cv::COLOR_YUV2BGR_NV12);
   memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
 }
 
 inline void RGB24_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
   cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
   cv::Mat bgr_mat;
-  cv::cvtColor(src, bgr_mat, CV_RGB2BGR);
+  cv::cvtColor(src, bgr_mat, cv::COLOR_RGB2BGR);
   memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
 }
 
 inline void BGR24_to_RGB24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
   cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
   cv::Mat rgb_mat;
-  cv::cvtColor(src, rgb_mat, CV_BGR2RGB);
+  cv::cvtColor(src, rgb_mat, cv::COLOR_BGR2RGB);
   memcpy(DataOut, rgb_mat.ptr<uint8_t>(), height * width * 3);
 }
 
@@ -476,7 +474,7 @@ inline void BGR24_to_NV12(const uint8_t *DataIn, uint8_t *DataOut, int width, in
           "height: %d \nwidth: %d", __func__, height, width);
   }
   cv::Mat yuv_mat(height * 3 / 2, width, CV_8UC1);
-  cv::cvtColor(src, yuv_mat, CV_BGR2YUV_I420);
+  cv::cvtColor(src, yuv_mat, cv::COLOR_BGR2YUV_I420);
 
   int32_t y_size = height * width;
   int32_t uv_height = height / 2;

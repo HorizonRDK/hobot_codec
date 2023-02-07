@@ -22,7 +22,6 @@
 
 namespace hobot_decoder_common
 {
-#ifndef PLATFORM_X86
 // 按位与提取NALU类型的掩码位
 #define H264_GET_NALU_TYPE 0x1F
 // 原始的Nal数据
@@ -223,7 +222,6 @@ int findSPSPPSVPS(CodecImgFormat p_nStreamType, const unsigned char* p_pszFrameD
   return -1;
 }
 
-#endif
 
 }
 

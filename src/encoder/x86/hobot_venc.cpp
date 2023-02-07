@@ -14,7 +14,6 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "hobot_venc.h"
-#include "decoder/hobot_decoder_common.hpp"
 
 #include "opencv2/core/core.hpp"
 #include "opencv2/opencv.hpp"

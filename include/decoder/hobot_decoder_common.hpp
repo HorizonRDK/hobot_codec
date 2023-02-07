@@ -110,6 +110,7 @@ enum class NalUnitTypeH265 {
   NAL_UNIT_RESERVED_NVCL47 = 47,
 };
 
+
 int findH26xNalu(const unsigned char* p_pszData, int p_nDataLen, unsigned char* p_pszNaluType, int *nNalLen)
 {
   int nStartCodePos = 0;
@@ -220,6 +221,7 @@ int findSPSPPSVPS(CodecImgFormat p_nStreamType, const unsigned char* p_pszFrameD
   }
   return -1;
 }
+
 
 }
 

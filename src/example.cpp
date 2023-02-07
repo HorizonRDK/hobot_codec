@@ -14,9 +14,11 @@
 
 #include <string>
 #include <memory>
+#include <unistd.h>
 
 #include "rclcpp/rclcpp.hpp"
 #include "include/hobot_codec_node.h"
+
 
 // ros2 run hobot_codec hobot_codec_republish ros jpeg decompress sub_topic:=/image_raw/compressed
 // pub_topic:=/image_raw rgb8

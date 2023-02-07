@@ -314,12 +314,12 @@ HobotCodecNode::~HobotCodecNode()
     m_spThrdPub->join();
   }
 
-  if (mPtrInNv12) {
-    delete[] mPtrInNv12;
-    mPtrInNv12 = nullptr;
+  if (mPtrIn) {
+    delete[] mPtrIn;
+    mPtrIn = nullptr;
   }
-  if (mPtrOutRGB2)
-    delete[] mPtrOutRGB2;
+  if (mPtrOut)
+    delete[] mPtrOut;
 }
 
 int HobotCodecNode::init()
@@ -538,22 +538,39 @@ void HobotCodecNode::in_hbmem_topic_cb(
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("HobotCodecNode"), "Invalid codec impl!");
     return;
   }
-
+#ifndef PLATFORM_X86
   if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
     int nYuvLen = msg->width * msg->height * 3 / 2;
-    if (nullptr == mPtrInNv12)
-      mPtrInNv12 = new uint8_t[msg->width * msg->height * 3 / 2];
-    if (0 == in_format_.compare("bgr8") && mPtrInNv12) {
-      video_utils::BGR24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
+    if (nullptr == mPtrIn)
+      mPtrIn = new uint8_t[msg->width * msg->height * 3 / 2];
+    if (0 == in_format_.compare("bgr8") && mPtrIn) {
+      video_utils::BGR24_to_NV12(msg->data.data(), mPtrIn, msg->width, msg->height);
     } else {
-      video_utils::RGB24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
+      video_utils::RGB24_to_NV12(msg->data.data(), mPtrIn, msg->width, msg->height);
     }
-    sp_hobot_codec_impl_->Input(mPtrInNv12, msg->width, msg->height, nYuvLen,
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, nYuvLen,
       std::make_shared<FrameInfo>(msg->index, time_in, time_now));
   } else {
     sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data_size,
       std::make_shared<FrameInfo>(msg->index, time_in, time_now));
   }
+#else
+  if (nullptr == mPtrIn) {
+    mPtrIn = new uint8_t[msg->width * msg->height * 3];
+  } 
+  //opencv编码输入类型为BGR格式
+  if (0 == in_format_.compare("rgb8") && mPtrIn) {
+    video_utils::RGB24_to_BGR24(msg->data.data(), mPtrIn, msg->width, msg->height);
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, msg->width * msg->height * 3, std::make_shared<FrameInfo>(0, time_in, time_now));
+  } else if (0 == in_format_.compare("nv12")) {
+    video_utils::NV12_to_BGR24(msg->data.data(), mPtrIn, msg->width, msg->height);
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, msg->width * msg->height * 3 / 2, std::make_shared<FrameInfo>(0, time_in, time_now));
+  } else {
+    //jpeg的解码以及BGR8的编码调用该接口
+    sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data.size(), std::make_shared<FrameInfo>(0, time_in, time_now));    
+  }
+#endif
+
   clock_gettime(CLOCK_REALTIME, &time_end);
   ss << ", comm delay ms: " << tool_calc_time_laps(time_in, time_now)
     << ", Input delay ms: " << (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
@@ -672,6 +689,7 @@ void HobotCodecNode::in_ros_topic_cb(
       return;
     }
   }
+#ifndef PLATFORM_X86
 
   if (0 == in_format_.compare("bgr8") || 0 == in_format_.compare("rgb8")) {
     size_t nYuvLen = msg->width * msg->height * 3 / 2;
@@ -680,24 +698,43 @@ void HobotCodecNode::in_ros_topic_cb(
         __func__, msg->data.size(), nYuvLen * 2);
       return;
     }
-    if (nullptr == mPtrInNv12)
-      mPtrInNv12 = new uint8_t[nYuvLen];
-    if (0 == in_format_.compare("bgr8") && mPtrInNv12) {
-      video_utils::BGR24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
+    if (nullptr == mPtrIn)
+      mPtrIn = new uint8_t[nYuvLen];
+    if (0 == in_format_.compare("bgr8") && mPtrIn) {
+      video_utils::BGR24_to_NV12(msg->data.data(), mPtrIn, msg->width, msg->height);
     } else {
-      video_utils::RGB24_to_NV12(msg->data.data(), mPtrInNv12, msg->width, msg->height);
+      video_utils::RGB24_to_NV12(msg->data.data(), mPtrIn, msg->width, msg->height);
     }
-    sp_hobot_codec_impl_->Input(mPtrInNv12, msg->width, msg->height, nYuvLen,
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, nYuvLen,
       std::make_shared<FrameInfo>(0, time_in, time_now));
   } else {
     sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data.size(),
       std::make_shared<FrameInfo>(0, time_in, time_now));
   }
+
+#else
+
+  if (nullptr == mPtrIn) {
+    mPtrIn = new uint8_t[msg->width * msg->height * 3];
+  } 
+  //opencv编码输入类型为BGR格式
+  if (0 == in_format_.compare("rgb8") && mPtrIn) {
+    video_utils::RGB24_to_BGR24(msg->data.data(), mPtrIn, msg->width, msg->height);
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, msg->width * msg->height * 3, std::make_shared<FrameInfo>(0, time_in, time_now));
+  } else if (0 == in_format_.compare("nv12")) {
+    video_utils::NV12_to_BGR24(msg->data.data(), mPtrIn, msg->width, msg->height);
+    sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, msg->width * msg->height * 3 / 2, std::make_shared<FrameInfo>(0, time_in, time_now));
+  } else {
+    //jpeg的解码以及BGR8的编码调用该接口
+    sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data.size(), std::make_shared<FrameInfo>(0, time_in, time_now));    
+  }
+
+#endif
+
   clock_gettime(CLOCK_REALTIME, &time_end);
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "recved img fmt: %s, w:h: %d:%d, tmlaps: %dms, dLen: %d, laps: %d.",
     msg->encoding.data(), msg->width, msg->height, tool_calc_time_laps(time_in, time_now),
     msg->data.size(), (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow);
-
   return;
 }
 
@@ -830,19 +867,20 @@ void HobotCodecNode::timer_ros_pub()
       img_pub_->step = oFrame->mWidth * 3;
     }
     img_pub_->encoding = out_format_.c_str();
+#ifndef PLATFORM_X86
     if (CodecImgFormat::FORMAT_NV12 == oFrame->mFrameFmt) {
       if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
         int nRgbLen = oFrame->mHeight * oFrame->mWidth * 3;
-        if (nullptr == mPtrOutRGB2)
-          mPtrOutRGB2 = new uint8_t[nRgbLen];
-        if (mPtrOutRGB2) {
+        if (nullptr == mPtrOut)
+          mPtrOut = new uint8_t[nRgbLen];
+        if (mPtrOut) {
           if (0 == out_format_.compare("bgr8")) {
-            video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOutRGB2, oFrame->mWidth , oFrame->mHeight);
+            video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
           } else {
-            video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOutRGB2, oFrame->mWidth , oFrame->mHeight);
+            video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
           }
           img_pub_->data.resize(nRgbLen);
-          memcpy(&img_pub_->data[0], mPtrOutRGB2, nRgbLen);
+          memcpy(&img_pub_->data[0], mPtrOut, nRgbLen);
         }
       } else {
         int nOffSet = oFrame->mHeight * oFrame->mWidth;
@@ -855,7 +893,38 @@ void HobotCodecNode::timer_ros_pub()
       img_pub_->data.resize(oFrame->mDataLen);
       memcpy(&img_pub_->data[0], oFrame->mPtrData, oFrame->mDataLen);
     }
+
+#else
+if(oFrame->mPtrData != nullptr)
+{
+  if (CodecImgFormat::FORMAT_BGR == oFrame->mFrameFmt) {
+    int rgbLen = oFrame->mHeight * oFrame->mWidth * 3;
+    if (0 == out_format_.compare("rgb8") ) {
+      if (nullptr == mPtrOut) {
+        mPtrOut = new uint8_t[rgbLen];
+      }
+      video_utils::BGR24_to_RGB24(oFrame->mPtrData, mPtrOut, oFrame->mWidth,oFrame->mHeight);
+      img_pub_->data.resize(rgbLen);
+      memcpy(&img_pub_->data[0], mPtrOut, rgbLen);
+    } else if (0 == out_format_.compare("nv12")) {
+      int nv12Len = oFrame->mHeight * oFrame->mWidth * 3 / 2;
+      if (nullptr == mPtrOut) {
+        mPtrOut = new uint8_t[nv12Len];
+      }
+      video_utils::BGR24_to_NV12(oFrame->mPtrData, mPtrOut, oFrame->mWidth, oFrame->mHeight);
+      img_pub_->data.resize(nv12Len);
+      memcpy(&img_pub_->data[0], mPtrOut, nv12Len);
+    } else {
+      img_pub_->data.resize(oFrame->mDataLen);
+      memcpy(&img_pub_->data[0], oFrame->mPtrData, oFrame->mDataLen);
+    }
+  } else {
+    img_pub_->data.resize(oFrame->mDataLen);
+    memcpy(&img_pub_->data[0], oFrame->mPtrData, oFrame->mDataLen);
     
+  }
+}
+#endif
     ss << ", encoding: " << img_pub_->encoding
     << ", w: " << img_pub_->width
     << ", h: " << img_pub_->height
@@ -884,6 +953,8 @@ void HobotCodecNode::timer_ros_pub()
     << tool_calc_time_laps(oFrame->sp_frame_info->img_recved_ts_,
       oFrame->sp_frame_info->img_processed_ts_);
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
+
+  
 }
 
 void HobotCodecNode::timer_hbmem_pub() {
@@ -970,6 +1041,7 @@ void HobotCodecNode::timer_hbmem_pub() {
       int nOffSet = oFrame->mHeight * oFrame->mWidth;
       RCLCPP_DEBUG(rclcpp::get_logger("HobotCodecNode"), "mFrameFmt: %d",
       static_cast<int>(oFrame->mFrameFmt));
+#ifndef PLATFORM_X86
       if (CodecImgFormat::FORMAT_INVALID == oFrame->mFrameFmt) {
         RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid mFrameFmt: %d",
         static_cast<int>(oFrame->mFrameFmt));
@@ -978,15 +1050,15 @@ void HobotCodecNode::timer_hbmem_pub() {
         if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
           int nRgbLen = oFrame->mHeight * oFrame->mWidth * 3;
           msg.data_size = nRgbLen;
-          if (nullptr == mPtrOutRGB2)
-            mPtrOutRGB2 = new uint8_t[nRgbLen];
-          if (mPtrOutRGB2) {
+          if (nullptr == mPtrOut)
+            mPtrOut = new uint8_t[nRgbLen];
+          if (mPtrOut) {
             if (0 == out_format_.compare("bgr8")) {
-              video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOutRGB2, oFrame->mWidth , oFrame->mHeight);
+              video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
             } else {
-              video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOutRGB2, oFrame->mWidth , oFrame->mHeight);
+              video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
             }
-            memcpy(msg.data.data(), mPtrOutRGB2, nRgbLen);
+            memcpy(msg.data.data(), mPtrOut, nRgbLen);
           }
         } else {
           memcpy(msg.data.data(), oFrame->mPtrY, nOffSet);
@@ -996,6 +1068,40 @@ void HobotCodecNode::timer_hbmem_pub() {
       } else {
         memcpy(msg.data.data(), oFrame->mPtrData, oFrame->mDataLen);
       }
+#else
+if(oFrame->mPtrData != nullptr)
+{
+  if (CodecImgFormat::FORMAT_INVALID == oFrame->mFrameFmt) {
+  RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid mFrameFmt: %d",
+  static_cast<int>(oFrame->mFrameFmt));
+  return;
+  } else if (CodecImgFormat::FORMAT_BGR == oFrame->mFrameFmt) {
+    int rgbLen = oFrame->mHeight * oFrame->mWidth * 3;
+    if (0 == out_format_.compare("rgb8") ) {
+      if (nullptr == mPtrOut) {
+        mPtrOut = new uint8_t[rgbLen];
+      }
+      video_utils::BGR24_to_RGB24(oFrame->mPtrData, mPtrOut, oFrame->mWidth,oFrame->mHeight);
+      msg.data_size = rgbLen;
+      memcpy(msg.data.data(), mPtrOut, rgbLen);
+    } else if (0 == out_format_.compare("nv12")) {
+      int nv12Len = oFrame->mHeight * oFrame->mWidth * 3 / 2;
+      if (nullptr == mPtrOut) {
+        mPtrOut = new uint8_t[nv12Len];
+      }
+      video_utils::BGR24_to_NV12(oFrame->mPtrData, mPtrOut, oFrame->mWidth, oFrame->mHeight);
+      msg.data_size = nv12Len;
+      memcpy(msg.data.data(), mPtrOut, nv12Len);
+    } else {
+      msg.data_size = oFrame->mDataLen;
+      memcpy(msg.data.data(), oFrame->mPtrData, oFrame->mDataLen);
+    }
+  } else {
+    msg.data_size = oFrame->mDataLen;
+    memcpy(msg.data.data(), oFrame->mPtrData, oFrame->mDataLen);
+  }
+}
+#endif
       msg.index = mSendIdx++;
       
       ss << ", encoding: " << msg.encoding.data()

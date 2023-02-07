@@ -42,6 +42,7 @@ enum class CodecImgFormat {
   FORMAT_H265,
   FORMAT_JPEG,
   FORMAT_MJPEG,
+  FORMAT_BGR,
 };
 
 // 数据帧信息
@@ -63,7 +64,7 @@ struct FrameInfo {
 // 输出数据
 struct OutputFrameDataType {
   // 编码输出地址
-  uint8_t *mPtrData;
+  uint8_t *mPtrData = nullptr;
   // 解码输出地址
   uint8_t *mPtrY;
   uint8_t *mPtrUV;

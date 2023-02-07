@@ -32,7 +32,6 @@ endif()
 # BUILD_HBMEM is set in aarch64_toolchainfile.cmake
 if (${BUILD_HBMEM})
   message("using shared mem")
-  add_definitions(-DUSING_HBMEM)
   find_package(hbm_img_msgs REQUIRED)
   add_definitions(-DSHARED_MEM_MSG)
 else()
@@ -65,6 +64,7 @@ elseif(PLATFORM_X86)
   add_definitions(-DPLATFORM_X86)
   set(PREFIX_PATH x86)
   message("THIRD_PARTY is " ${THIRD_PARTY})
+  find_package(OpenCV REQUIRED)
   include_directories(
     /usr/include/
     ${THIRD_PARTY}/usr/include/
@@ -108,6 +108,7 @@ if(PLATFORM_X3)
 elseif(PLATFORM_J5)
   set(SYS_LIB multimedia)
 elseif(PLATFORM_X86)
+  set(SYS_LIB ${OpenCV_LIBS})
 else()
   message("link platform X3 libs default")
   set(SYS_LIB vio isp_algo z hbmedia isp ion multimedia iar tinyalsa cjson)
@@ -119,9 +120,6 @@ target_link_libraries(hobot_codec_republish
 )
 
 if (${BUILD_HBMEM})
-target_link_libraries(hobot_codec_republish
-  hbmem alog
-)
 ament_target_dependencies(
   hobot_codec_republish
   rclcpp

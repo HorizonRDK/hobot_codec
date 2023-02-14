@@ -34,6 +34,39 @@
 #ifndef INCLUDE_HOBOT_CODEC_NODE_H_
 #define INCLUDE_HOBOT_CODEC_NODE_H_
 
+struct RunTimeData {
+  // input stat
+  float in_frame_count_ = 0;
+  // units of delay are ms
+  // communication delay
+  float in_comm_delay_ = 0;
+  // input codec delay
+  float in_codec_delay_ = 0;
+
+  // output stat
+  float out_frame_count_ = 0;
+  // units of delay are ms
+  // delay from frame in to out
+  float out_codec_delay_ = 0;
+};
+
+class RunTimeStat {
+ public:
+  static std::shared_ptr<RunTimeStat> GetInstance() {
+    static auto sp_run_time_stat = std::make_shared<RunTimeStat>();
+    return sp_run_time_stat;
+  }
+
+  int Update(std::shared_ptr<RunTimeData> sp_run_time_data);
+  std::shared_ptr<RunTimeData> Get(int time_interval_ms = 1000);
+
+ private:
+  std::shared_ptr<std::chrono::high_resolution_clock::time_point>
+      last_frame_tp_ = nullptr;
+  RunTimeData run_time_data_;
+  std::mutex frame_stat_mtx_;
+};
+
 // 即是接收端，又是发布端，接收，传编解码器，得到结果pub，帧率？
 class HobotCodecNode : public rclcpp::Node {
  public:

@@ -483,10 +483,19 @@ void HobotCodecNode::in_hbmemh264_topic_cb(
   if (0 == sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data_size,
     std::make_shared<FrameInfo>(msg->index, time_in, time_now))) {
     clock_gettime(CLOCK_REALTIME, &time_end);
-    ss << ", comm delay ms: " << tool_calc_time_laps(time_in, time_now)
-      << ", Input delay ms: " << (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+    auto sp_run_time_data = std::make_shared<RunTimeData>();
+    sp_run_time_data->in_frame_count_ = 1;
+    sp_run_time_data->in_comm_delay_ =
+      tool_calc_time_laps(time_in, time_now);
+    sp_run_time_data->in_codec_delay_ =
+      (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+    RunTimeStat::GetInstance()->Update(sp_run_time_data);
+
+    ss << ", comm delay ms: " << sp_run_time_data->in_comm_delay_
+      << ", Input delay ms: " << sp_run_time_data->in_codec_delay_;
     RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
   }
+
 }
 
 void HobotCodecNode::in_hbmem_topic_cb(
@@ -572,8 +581,17 @@ void HobotCodecNode::in_hbmem_topic_cb(
 #endif
 
   clock_gettime(CLOCK_REALTIME, &time_end);
-  ss << ", comm delay ms: " << tool_calc_time_laps(time_in, time_now)
-    << ", Input delay ms: " << (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+  
+  auto sp_run_time_data = std::make_shared<RunTimeData>();
+  sp_run_time_data->in_frame_count_ = 1;
+  sp_run_time_data->in_comm_delay_ =
+    tool_calc_time_laps(time_in, time_now);
+  sp_run_time_data->in_codec_delay_ =
+    (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+  RunTimeStat::GetInstance()->Update(sp_run_time_data);
+
+  ss << ", comm delay ms: " << sp_run_time_data->in_comm_delay_
+    << ", Input delay ms: " << sp_run_time_data->in_codec_delay_;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
 }
 #endif
@@ -629,8 +647,16 @@ void HobotCodecNode::in_ros_h26x_topic_cb(
   if (0 == sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data.size(),
     std::make_shared<FrameInfo>(msg->index, time_in, time_now))) {
     clock_gettime(CLOCK_REALTIME, &time_end);
-    ss << ", comm delay ms: " << tool_calc_time_laps(time_in, time_now)
-      << ", Input delay ms: " << (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+    auto sp_run_time_data = std::make_shared<RunTimeData>();
+    sp_run_time_data->in_frame_count_ = 1;
+    sp_run_time_data->in_comm_delay_ =
+      tool_calc_time_laps(time_in, time_now);
+    sp_run_time_data->in_codec_delay_ =
+      (time_end.tv_sec * 1000 + time_end.tv_nsec / 1000000) - mNow;
+    RunTimeStat::GetInstance()->Update(sp_run_time_data);
+
+    ss << ", comm delay ms: " << sp_run_time_data->in_comm_delay_
+      << ", Input delay ms: " << sp_run_time_data->in_codec_delay_;
     RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
   }
 
@@ -949,12 +975,28 @@ if(oFrame->mPtrData != nullptr)
 
   sp_hobot_codec_impl_->ReleaseOutput(oFrame);
 
-  ss << ", codec delay ms: "
-    << tool_calc_time_laps(oFrame->sp_frame_info->img_recved_ts_,
-      oFrame->sp_frame_info->img_processed_ts_);
-  RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
+  auto sp_run_time_data = std::make_shared<RunTimeData>();
+  sp_run_time_data->out_frame_count_ = 1;
+  sp_run_time_data->out_codec_delay_ =
+    tool_calc_time_laps(oFrame->sp_frame_info->img_recved_ts_,
+    oFrame->sp_frame_info->img_processed_ts_);
+  RunTimeStat::GetInstance()->Update(sp_run_time_data);
+  auto sp_rt_data = RunTimeStat::GetInstance()->Get();
+  if (sp_rt_data) {
+    RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"),
+    "sub " << in_format_
+    << " " << oFrame->mWidth << "x" << oFrame->mHeight
+    << ", fps: " << sp_rt_data->in_frame_count_
+    << ", pub " << out_format_
+    << ", fps: " << sp_rt_data->out_frame_count_
+    << ", comm delay: " << sp_rt_data->in_comm_delay_
+    << ", codec delay: " << sp_rt_data->out_codec_delay_
+    );
+  }
 
-  
+  ss << ", codec delay ms: "
+    << sp_run_time_data->out_codec_delay_;
+  RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
 }
 
 void HobotCodecNode::timer_hbmem_pub() {
@@ -1127,9 +1169,83 @@ if(oFrame->mPtrData != nullptr)
     }
   }
   sp_hobot_codec_impl_->ReleaseOutput(oFrame);
+  
+  auto sp_run_time_data = std::make_shared<RunTimeData>();
+  sp_run_time_data->out_frame_count_ = 1;
+  sp_run_time_data->out_codec_delay_ =
+    tool_calc_time_laps(oFrame->sp_frame_info->img_recved_ts_,
+    oFrame->sp_frame_info->img_processed_ts_);
+  RunTimeStat::GetInstance()->Update(sp_run_time_data);
+  auto sp_rt_data = RunTimeStat::GetInstance()->Get();
+  if (sp_rt_data) {
+    RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"),
+    "sub " << in_format_
+    << " " << oFrame->mWidth << "x" << oFrame->mHeight
+    << ", fps: " << sp_rt_data->in_frame_count_
+    << ", pub " << out_format_
+    << ", fps: " << sp_rt_data->out_frame_count_
+    << ", comm delay: " << sp_rt_data->in_comm_delay_
+    << ", codec delay: " << sp_rt_data->out_codec_delay_
+    );
+  }
+    
   ss << ", codec delay ms: "
-    << tool_calc_time_laps(oFrame->sp_frame_info->img_recved_ts_,
-      oFrame->sp_frame_info->img_processed_ts_);
+    << sp_run_time_data->out_codec_delay_;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
 #endif
+}
+
+int RunTimeStat::Update(std::shared_ptr<RunTimeData> sp_run_time_data) {
+  if (!sp_run_time_data) {
+    return -1;
+  }
+  std::unique_lock<std::mutex> lk(frame_stat_mtx_);
+  if (!last_frame_tp_) {
+    last_frame_tp_ =
+        std::make_shared<std::chrono::high_resolution_clock::time_point>();
+    *last_frame_tp_ = std::chrono::system_clock::now();
+  }
+
+  run_time_data_.in_frame_count_ += sp_run_time_data->in_frame_count_;
+  run_time_data_.in_comm_delay_ += sp_run_time_data->in_comm_delay_;
+  run_time_data_.in_codec_delay_ += sp_run_time_data->in_codec_delay_;
+  run_time_data_.out_frame_count_ += sp_run_time_data->out_frame_count_;
+  run_time_data_.out_codec_delay_ += sp_run_time_data->out_codec_delay_;
+
+  return 0;
+}
+
+std::shared_ptr<RunTimeData> RunTimeStat::Get(int time_interval_ms) {
+  std::unique_lock<std::mutex> lk(frame_stat_mtx_);
+  if (!last_frame_tp_ || time_interval_ms <= 0) {
+    return nullptr;
+  }
+
+  auto tp_now = std::chrono::system_clock::now();
+  auto interval = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      tp_now - *last_frame_tp_)
+                      .count();
+  if (interval >= time_interval_ms) {
+    if (run_time_data_.in_frame_count_ <= 0 || run_time_data_.out_frame_count_ <= 0) {
+      return nullptr;
+    }
+
+    auto run_time_data = std::make_shared<RunTimeData>();
+    // cal the average time delay with frame count
+    run_time_data->in_comm_delay_ = run_time_data_.in_comm_delay_ / run_time_data_.in_frame_count_;
+    run_time_data->in_codec_delay_ = run_time_data_.in_codec_delay_ / run_time_data_.in_frame_count_;
+
+    run_time_data->out_codec_delay_ = run_time_data_.out_codec_delay_ / run_time_data_.out_frame_count_;
+
+    // update frame count as frame fps
+    run_time_data->in_frame_count_ = run_time_data_.in_frame_count_ /
+                (static_cast<float>(interval) / 1000.0);
+    run_time_data->out_frame_count_ = run_time_data_.out_frame_count_ /
+                (static_cast<float>(interval) / 1000.0);
+    
+    memset(&run_time_data_, 0, sizeof(RunTimeData));
+    *last_frame_tp_ = std::chrono::system_clock::now();
+    return run_time_data;
+  }
+  return nullptr;
 }

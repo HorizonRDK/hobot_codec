@@ -287,6 +287,12 @@ int HobotVdec::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_c
     return -1;
   }
 
+  if ("h264" == sp_hobot_codec_para->in_format_ ||
+        "h264" == sp_hobot_codec_para->out_format_) {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "H264 is unsupported for J5 platform!");
+    return -1;
+  }
+
   if (sp_hobot_codec_para->mChannel_ < 0 || sp_hobot_codec_para->mChannel_ > 3) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),
         "Invalid channel number: %d! 0~3 are supported, "

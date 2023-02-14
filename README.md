@@ -203,3 +203,50 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=
 # 运行codec，订阅h265格式视频（通过shared_mem方式，话题必须是：image_h265），解码并发布nv12格式图片
 
 ```
+
+## 性能展示
+
+1、测试方法
+
+- 硬件：X3派4G版本，J5 EVM开发板
+
+- 锁定CPU频率：`echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor`
+
+- CPU占用为使用top命令查看测试进程的单核CPU占比。
+
+- 耗时表示从订阅到数据到完成编码/编码后发布数据的时间间隔，统计单位为ms，取平均值。
+
+- 使用图像发布工具hobot_image_publisher通过零拷贝发布图片/视频，测试编码/编码，分辨率1920x1080
+
+- 测试命令
+
+| 类型  | 输入格式 | 输出格式 | 执行命令 |
+| ----  | ------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.jpeg image_format:=jpeg codec_in_format:=jpeg codec_out_format:=nv12 |
+| 解码  |  H264   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.h264 image_format:=h264 codec_in_format:=h264 codec_out_format:=nv12 |
+| 解码  |  H265   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.h265 image_format:=h265 codec_in_format:=h265 codec_out_format:=nv12 |
+| 编码  |  NV12   |  JPEG   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=jpeg |
+| 编码  |  NV12   |  H264   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=h264 |
+| 编码  |  NV12   |  H265   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=h265 |
+
+2、测试结果
+
+X3派：
+
+| 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
+| ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | 4.4  | 17.0%   |  0.7%   |  30.3   |   30.3  |
+| 解码  |  H264   |  NV12   | 88.3 | 9.7%    |  0.7%   |  24.1   |   24.1  |
+| 解码  |  H265   |  NV12   | 87.0 | 9.6%    |  0.7%   |  24.1   |   24.1  |
+| 编码  |  NV12   |  JPEG   | 4.7  | 13.0%   |  0.8%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H264   | 5.5  | 11.0%   |  0.8%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H265   | 5.7  | 11.0%   |  0.8%   |  30.3   |   30.3  |
+
+J5 EVM：
+
+| 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
+| ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | 2.0  | 1.0%   |  22.4%   |  30.3   |   30.3  |
+| 解码  |  H265   |  NV12   | 44.1 | 0.8%   |  19.6%   |  24.1   |   24.1  |
+| 编码  |  NV12   |  JPEG   | 3.0  | 0.7%   |  22.2%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H265   | 5.0  | 0.8%   |  22.2%   |  30.3   |   30.3  |

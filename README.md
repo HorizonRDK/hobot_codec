@@ -33,14 +33,14 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 - 编程语言: C/C++
 - 开发平台: X3/X86
-- 系统版本：Ubuntu 20.0.4
+- 系统版本：Ubuntu 20.04
 - 编译工具链:Linux GCC 9.3.0/Linaro GCC 9.3.0
 
 ## 编译
 
 支持在X3 Ubuntu系统上编译和在PC上使用docker交叉编译两种方式。
 
-### X3 Ubuntu系统板端编译
+### X3 Ubuntu系统板端编译X3版本
 1、编译环境确认
 
  - 板端已安装X3 Ubuntu系统。
@@ -50,7 +50,7 @@ rosdep install -i --from-path . --rosdistro foxy -y
 2、编译：
   - `colcon build --packages-select hobot_codec`
 
-### docker交叉编译
+### docker交叉编译X3版本
 
 1、编译环境确认
 
@@ -74,6 +74,26 @@ rosdep install -i --from-path . --rosdistro foxy -y
      -DCMAKE_TOOLCHAIN_FILE=`pwd`/robot_dev_config/aarch64_toolchainfile.cmake
   ```
 - 其中SYS_ROOT为交叉编译系统依赖路径，此路径具体地址详见第1步“编译环境确认”的交叉编译说明。
+
+### X86 Ubuntu系统上编译 X86版本
+
+1、编译环境确认
+
+- X86 Ubuntu版本：Ubuntu20.04
+- Opencv：4.2.0
+
+2、编译
+
+- 编译命令： 
+
+  ```
+  colcon build --packages-select hobot_codec  \
+     --merge-install \
+     --cmake-args \
+     -DPLATFORM_X86=ON \
+     -DBUILD_HBMEM=ON \
+     -DTHIRD_PARTY=`pwd`/../sysroot_docker
+  ```
 
 # Usage
 
@@ -104,9 +124,10 @@ ros2 run hobot_codec hobot_codec_republish
 
 ### 注意：
 
-    由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
+    1、由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
+    2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
 
-运行方式1，命令方式。
+### 运行方式1，命令方式。
 
 1. 订阅MIPI摄像头发布的NV12格式图片，编码成JPEG图片并存储编码后的图片：
 ~~~shell
@@ -164,7 +185,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ~~~
 
 
-运行方式2，使用launch文件启动：
+### 运行方式2，使用launch文件启动：
 `ros2 launch hobot_codec hobot_codec.launch.py`
 
 ## X3 linaro系统

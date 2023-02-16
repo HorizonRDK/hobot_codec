@@ -14,27 +14,21 @@
 
 #include <string>
 #include <memory>
+#include <unistd.h>
 
 #include "rclcpp/rclcpp.hpp"
-#include "include/hobot_codec.h"
+#include "include/hobot_codec_node.h"
+
 
 // ros2 run hobot_codec hobot_codec_republish ros jpeg decompress sub_topic:=/image_raw/compressed
 // pub_topic:=/image_raw rgb8
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  RCLCPP_WARN(rclcpp::get_logger("example"), "This is HobotCodec example!");
-  rclcpp::NodeOptions opt;
 
-  rclcpp::Clock ros_clock(RCL_ROS_TIME);
-  static rclcpp::Time start = ros_clock.now();
-  std::string strName = "hobot_codec";
-
-  // auto node = std::make_shared<HobotCodec>(opt, "hobotCodec", argv[1], argv[2], argv[3], argv[4]);
-  auto node = std::make_shared<HobotCodec>(opt, strName + std::to_string(start.nanoseconds()));
-  RCLCPP_WARN(rclcpp::get_logger("example"), "HobotCodec init!");
-
-  rclcpp::spin(node);
-
+  std::string node_name = "hobot_codec_" + std::to_string(getpid());
+  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "This is HobotCodecNode: %s.", node_name.data());
+  rclcpp::spin(std::make_shared<HobotCodecNode>(rclcpp::NodeOptions(), node_name));
   rclcpp::shutdown();
+  RCLCPP_WARN(rclcpp::get_logger("HobotCodec"), "HobotCodecNode: %s exit.", node_name.data());
   return 0;
 }

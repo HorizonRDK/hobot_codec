@@ -15,46 +15,24 @@
 #ifndef INCLUDE_VIDEO_UTILS_HPP_
 #define INCLUDE_VIDEO_UTILS_HPP_
 
+#ifndef PLATFORM_X86
+
 #include <arm_neon.h>
 #include <sys/ioctl.h>
 #include <cstring>
 #include <sstream>
 
+#else
+
+#include "opencv2/core/mat.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+
+#endif
+
 namespace video_utils
 {
-inline uint32_t GetTickCount()
-{
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);  // CLOCK_MONOTONIC
-  return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
-}
-
-inline void monotonicToRealTime(const timespec & monotonic_time, timespec * real_time)
-{
-  struct timespec real_sample1, real_sample2, monotonic_sample;
-
-  // otherwise what if there is a delay/interruption between sampling the times?
-  clock_gettime(CLOCK_REALTIME, &real_sample1);
-  clock_gettime(CLOCK_MONOTONIC, &monotonic_sample);
-  clock_gettime(CLOCK_REALTIME, &real_sample2);
-
-  timespec time_diff;
-  time_diff.tv_sec = real_sample2.tv_sec - monotonic_sample.tv_sec;
-  time_diff.tv_nsec = real_sample2.tv_nsec - monotonic_sample.tv_nsec;
-
-  // This isn't available outside of the kernel
-  // real_time = timespec_add(monotonic_time, time_diff);
-  const int64_t NSEC_PER_SEC = 1000000000;
-  real_time->tv_sec = monotonic_time.tv_sec + time_diff.tv_sec;
-  real_time->tv_nsec = monotonic_time.tv_nsec + time_diff.tv_nsec;
-  if (real_time->tv_nsec >= NSEC_PER_SEC) {
-    ++real_time->tv_sec;
-    real_time->tv_nsec -= NSEC_PER_SEC;
-  } else if (real_time->tv_nsec < 0) {
-    --real_time->tv_sec;
-    real_time->tv_nsec += NSEC_PER_SEC;
-  }
-}
+#ifndef PLATFORM_X86
 
 const uint8_t Y_SUBS[8] = { 16, 16, 16, 16, 16, 16, 16, 16 };
 const uint8_t UV_SUBS[8] = { 128, 128, 128, 128, 128, 128, 128, 128 };
@@ -77,7 +55,6 @@ inline void NV12_TO_BGR24(unsigned char *_src, unsigned char* pUv, unsigned char
 
   // int width2 = width >> 1;
   int width3 = (width << 2) - width;
-  int width9 = (width << 3) + width;
   unsigned char *RGBOut1 = RGBOut;
   unsigned char *RGBOut2 = RGBOut1 + width3;
   // unsigned char *RGBOut1 = RGBOut + 3 * width * (height - 2);
@@ -169,7 +146,6 @@ inline void NV12_TO_RGB24(unsigned char *_src, unsigned char* pUv, unsigned char
   uint8x8_t UV_SUBvec = vld1_u8(UV_SUBS);
 
   int width3 = (width << 2) - width;
-  int width9 = (width << 3) + width;
   unsigned char *RGBOut1 = RGBOut;
   unsigned char *RGBOut2 = RGBOut1 + width3;
   unsigned char tempUV[8];
@@ -465,5 +441,62 @@ inline void BGR24_to_NV12(const unsigned char* pRGB, unsigned char* pNV12, int w
         }
     }
 }
+
+#else
+inline void NV12_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height * 3 / 2, width, CV_8UC1, (void*)DataIn);
+  cv::Mat bgr_mat;
+  cv::cvtColor(src, bgr_mat, cv::COLOR_YUV2BGR_NV12);
+  memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void RGB24_to_BGR24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  cv::Mat bgr_mat;
+  cv::cvtColor(src, bgr_mat, cv::COLOR_RGB2BGR);
+  memcpy(DataOut, bgr_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void BGR24_to_RGB24(const uint8_t *DataIn, uint8_t *DataOut, int width, int height) {
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  cv::Mat rgb_mat;
+  cv::cvtColor(src, rgb_mat, cv::COLOR_BGR2RGB);
+  memcpy(DataOut, rgb_mat.ptr<uint8_t>(), height * width * 3);
+}
+
+inline void BGR24_to_NV12(const uint8_t *DataIn, uint8_t *DataOut, int width, int height)
+{
+  cv::Mat img_nv12;
+  cv::Mat src(height , width, CV_8UC3, (void*)DataIn);
+  if (height % 2 || width % 2) {
+    RCLCPP_ERROR(rclcpp::get_logger("hobot_codec"),
+          "[%s]: Image height and width must aligned by 2\n"
+          "height: %d \nwidth: %d", __func__, height, width);
+  }
+  cv::Mat yuv_mat(height * 3 / 2, width, CV_8UC1);
+  cv::cvtColor(src, yuv_mat, cv::COLOR_BGR2YUV_I420);
+
+  int32_t y_size = height * width;
+  int32_t uv_height = height / 2;
+  int32_t uv_width = width / 2;
+
+  img_nv12 = cv::Mat(height * 3 / 2, width, CV_8UC1);
+  auto nv12_ptr = img_nv12.ptr<uint8_t>();
+  if (yuv_mat.data == nullptr) {
+    RCLCPP_ERROR(rclcpp::get_logger("hobot_codec"),
+      "[%s]: yuv_mat.data is null pointer", __func__);
+  }
+  auto yuv_ptr = yuv_mat.ptr<uint8_t>();
+  memcpy(nv12_ptr, yuv_ptr, y_size);
+  uint8_t *nv12_uv = nv12_ptr + y_size;
+  uint8_t *u_data = yuv_ptr + y_size;
+  uint8_t *v_data = u_data + uv_height * uv_width;
+  for (int32_t i = 0; i < uv_width * uv_height; i++) {
+    *nv12_uv++ = *u_data++;
+    *nv12_uv++ = *v_data++;
+  }
+  memcpy(DataOut, img_nv12.ptr<uint8_t>(), height * width * 3 / 2);
+}
+#endif
 }  // namespace video_utils
 #endif  // INCLUDE_VIDEO_UTILS_HPP_

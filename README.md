@@ -33,14 +33,14 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 - 编程语言: C/C++
 - 开发平台: X3/X86
-- 系统版本：Ubuntu 20.0.4
+- 系统版本：Ubuntu 20.04
 - 编译工具链:Linux GCC 9.3.0/Linaro GCC 9.3.0
 
 ## 编译
 
 支持在X3 Ubuntu系统上编译和在PC上使用docker交叉编译两种方式。
 
-### X3 Ubuntu系统板端编译
+### X3 Ubuntu系统板端编译X3版本
 1、编译环境确认
 
  - 板端已安装X3 Ubuntu系统。
@@ -50,7 +50,7 @@ rosdep install -i --from-path . --rosdistro foxy -y
 2、编译：
   - `colcon build --packages-select hobot_codec`
 
-### docker交叉编译
+### docker交叉编译X3版本
 
 1、编译环境确认
 
@@ -74,6 +74,26 @@ rosdep install -i --from-path . --rosdistro foxy -y
      -DCMAKE_TOOLCHAIN_FILE=`pwd`/robot_dev_config/aarch64_toolchainfile.cmake
   ```
 - 其中SYS_ROOT为交叉编译系统依赖路径，此路径具体地址详见第1步“编译环境确认”的交叉编译说明。
+
+### X86 Ubuntu系统上编译 X86版本
+
+1、编译环境确认
+
+- X86 Ubuntu版本：Ubuntu20.04
+- Opencv：4.2.0
+
+2、编译
+
+- 编译命令： 
+
+  ```
+  colcon build --packages-select hobot_codec  \
+     --merge-install \
+     --cmake-args \
+     -DPLATFORM_X86=ON \
+     -DBUILD_HBMEM=ON \
+     -DTHIRD_PARTY=`pwd`/../sysroot_docker
+  ```
 
 # Usage
 
@@ -100,49 +120,73 @@ ros2 run hobot_codec hobot_codec_republish
 | jpg_quality      | jpeg 编码质量                | 浮点数 0-100                                  | 60.0                  |
 | input_framerate  | 输入帧率，实际送数据帧率     | 正整数                                        | 30                    |
 | output_framerate | 输出帧率，仅编码模式支持配置 | 正整数，小于等于输入帧率                      | -1（不开启帧率控制）  |
+| dump_output      | 存储编解码输出配置            | True存储，False不存储                          | False                 |
 
 ### 注意：
 
-    由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
+    1、由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
+    2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
 
-运行方式1，命令方式：
-解码 jpeg 测试：
-```
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
-// 先用获取的 mipi_cam 的数据进行 jpeg 编码
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
+### 运行方式1，命令方式。
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=jpeg -p out_mode:=ros -p out_format:=rgb8 -p sub_topic:=/image_jpeg -p pub_topic:=/image_raw_nv12
-```
-编码 jpeg 测试：
-```
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
-
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg
-
-#share memory
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg -p sub_topic:=/hbmem_img -p pub_topic:=/image_jpeg
-```
-编码jpeg，发布compressed格式消息，并设置输出帧率：
-
+1. 订阅MIPI摄像头发布的NV12格式图片，编码成JPEG图片并存储编码后的图片：
 ~~~shell
-ros2 run mipi_cam mipi_cam --ros-args -p video_device:=F37 -p image_width:=640 -p image_height:=480 -p out_format:=nv12
+# MIPI摄像头通过零拷贝发布NV12格式图片
+ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=jpeg-compressed -p sub_topic:=/image_raw -p pub_topic:=/image_jpeg/compressed -p output_framerate:=20
+# 编码成JPEG
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=True
 ~~~
 
-编解码 h264 测试：
+2. 订阅图像发布工具发布的NV12格式图片，测试编码：
+~~~shell
+# 图像发布工具发布NV12格式图片
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p source_image_w:=960 -p source_image_h:=544
 
-```
-ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12
+# 编码成jpeg
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=False
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=nv12 -p out_mode:=ros -p out_format:=h264 -p sub_topic:=/image_raw -p pub_topic:=/image_h264
+# 编码成h264
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h264 -p sub_topic:=/hbmem_img -p dump_output:=False
 
-ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=0 -p in_mode:=ros -p in_format:=h264 -p out_mode:=ros -p out_format:=nv12 -p sub_topic:=/image_h264 -p pub_topic:=/image_nv12
-```
-运行方式2，使用launch文件启动：
-`ros2 launch install/share/hobot_codec/launch/hobot_codec.launch.py`
+# 编码成h265
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p dump_output:=False
+~~~
 
+2. 订阅H264视频，解码出NV12格式图片并存储：
+~~~shell
+# 解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
+
+# 图像发布工具发布h264视频
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.h264 -p image_format:=h264
+~~~
+
+3. 订阅H265视频，解码出NV12格式图片并存储：
+~~~shell
+# 解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
+
+# 图像发布工具发布h265视频
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/sky.h265 -p image_format:=h265
+~~~
+
+4. 订阅JPEG图片后解码成NV12格式：
+~~~shell
+# 订阅jpeg图片，解码成nv12图片
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=False
+
+# 图像发布工具发布JPEG格式图片
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p is_compressed_img_pub:=True -p msg_pub_topic_name:=/image_jpeg
+~~~
+
+
+### 运行方式2，使用launch文件启动：
+`ros2 launch hobot_codec hobot_codec.launch.py`
 
 ## X3 linaro系统
 
@@ -180,3 +224,56 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=
 # 运行codec，订阅h265格式视频（通过shared_mem方式，话题必须是：image_h265），解码并发布nv12格式图片
 
 ```
+
+## 性能展示
+
+1、测试方法
+
+- 硬件：X3派4G版本，J5 EVM开发板
+
+- 锁定CPU频率：`echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor`
+
+- CPU占用为使用top命令查看测试进程的单核CPU占比。
+
+- 耗时表示从订阅到数据到完成编码/编码后发布数据的时间间隔，统计单位为ms，取平均值。
+
+- 使用图像发布工具hobot_image_publisher通过零拷贝发布图片/视频，测试编码/编码，分辨率1920x1080
+
+- 测试命令
+
+| 类型  | 输入格式 | 输出格式 | 执行命令 |
+| ----  | ------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.jpeg image_format:=jpeg codec_in_format:=jpeg codec_out_format:=nv12 |
+| 解码  |  H264   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.h264 image_format:=h264 codec_in_format:=h264 codec_out_format:=nv12 |
+| 解码  |  H265   |  NV12   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.h265 image_format:=h265 codec_in_format:=h265 codec_out_format:=nv12 |
+| 编码  |  NV12   |  JPEG   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=jpeg |
+| 编码  |  NV12   |  H264   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=h264 |
+| 编码  |  NV12   |  H265   | ros2 launch hobot_codec hobot_codec_benchmark.launch.py image_source:=1920x1080.nv12 image_format:=nv12 codec_in_format:=nv12 codec_out_format:=h265 |
+
+2、测试结果
+
+X3派：
+
+| 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
+| ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | 4.4  | 17.0%   |  0.7%   |  30.3   |   30.3  |
+| 解码  |  H264   |  NV12   | 88.3 | 9.7%    |  0.7%   |  24.1   |   24.1  |
+| 解码  |  H265   |  NV12   | 87.0 | 9.6%    |  0.7%   |  24.1   |   24.1  |
+| 编码  |  NV12   |  JPEG   | 4.7  | 13.0%   |  0.8%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H264   | 5.5  | 11.0%   |  0.8%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H265   | 5.7  | 11.0%   |  0.8%   |  30.3   |   30.3  |
+
+J5 EVM：
+
+| 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
+| ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | 2.0  | 1.0%   |  22.4%   |  30.3   |   30.3  |
+| 解码  |  H265   |  NV12   | 44.1 | 0.8%   |  19.6%   |  24.1   |   24.1  |
+| 编码  |  NV12   |  JPEG   | 3.0  | 0.7%   |  22.2%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  H265   | 5.0  | 0.8%   |  22.2%   |  30.3   |   30.3  |
+
+X86 (i7-8700K)：
+| 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
+| ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |
+| 解码  |  JPEG   |  NV12   | 14.0  | 72.3%   |  0.4%   |  30.3   |   30.3  |
+| 编码  |  NV12   |  JPEG   | 12.0  | 70.1%   |  0.3%   |  30.3   |   30.3  |

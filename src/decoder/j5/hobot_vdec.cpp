@@ -132,8 +132,19 @@ int HobotVdec::Start(int nPicWidth, int nPicHeight) {
     params->jpeg_dec_config.rot_degree = MC_CCW_0;
     params->jpeg_dec_config.mir_direction = MC_DIRECTION_NONE;
     params->jpeg_dec_config.frame_crop_enable = false;
+  } else if (context_->codec_id == MEDIA_CODEC_ID_H264) {
+      params->h264_dec_config.bandwidth_Opt = true;
+      params->h264_dec_config.reorder_enable = true;
+      params->h264_dec_config.skip_mode = 0;
+  } else if (context_->codec_id == MEDIA_CODEC_ID_H265) {
+      params->h265_dec_config.bandwidth_Opt = true;
+      params->h265_dec_config.reorder_enable = true;
+      params->h265_dec_config.skip_mode = 0;
+      params->h265_dec_config.cra_as_bla = false;
+      params->h265_dec_config.dec_temporal_id_mode = 0;
+      params->h265_dec_config.target_dec_temporal_id_plus1 = 0;
   }
-
+  
   // codec_buf_size_ = init_pic_w_ * init_pic_h_;
   codec_buf_size_ = (nPicWidth * nPicHeight * 3 / 2 + 0x3ff)&~0x3ff;
   params->bitstream_buf_size = codec_buf_size_;

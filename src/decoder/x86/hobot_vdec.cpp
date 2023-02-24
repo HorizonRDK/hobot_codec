@@ -125,29 +125,28 @@ int HobotVdec::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
       return -1;
   }
 
-	if(m_status == false) {
-		if (nullptr == m_transformData.mPtrData) {
-			m_MtxFrame.lock();
-			m_transformData.mPtrData = new uint8_t[nPicWidth * nPicHeight * 3];
-			m_transformData.mWidth = nPicWidth;
-			m_transformData.mHeight = nPicHeight;
-			m_transformData.mDataLen = nPicWidth * nPicHeight * 3;
-			m_MtxFrame.unlock();
-		} 
-		if(m_enPalType == CodecImgFormat::FORMAT_JPEG) {
-			std::vector<uint8_t> buff(nPicWidth * nPicHeight * 3);
-			memcpy(reinterpret_cast<void*>(&buff[0]), pDataIn, nLen);
-			cv::Mat out_data = cv::imdecode(buff, CV_LOAD_IMAGE_COLOR);
-			m_MtxFrame.lock();
-			memcpy(m_transformData.mPtrData, out_data.ptr<uint8_t>(), nPicWidth * nPicHeight * 3);
-			m_transformData.mFrameFmt = CodecImgFormat::FORMAT_BGR;
-			m_status = true;
-			m_MtxFrame.unlock();
-		} else {
-			RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),"Only decoding of JPEG is supported");
-      rclcpp::shutdown();
-		}
-	}
+  if (nullptr == m_transformData.mPtrData) {
+    m_MtxFrame.lock();
+    m_transformData.mPtrData = new uint8_t[nPicWidth * nPicHeight * 3];
+    m_transformData.mWidth = nPicWidth;
+    m_transformData.mHeight = nPicHeight;
+    m_transformData.mDataLen = nPicWidth * nPicHeight * 3;
+    m_MtxFrame.unlock();
+  } 
+  if(m_enPalType == CodecImgFormat::FORMAT_JPEG) {
+    std::vector<uint8_t> buff(nPicWidth * nPicHeight * 3);
+    memcpy(reinterpret_cast<void*>(&buff[0]), pDataIn, nLen);
+    cv::Mat out_data = cv::imdecode(buff, CV_LOAD_IMAGE_COLOR);
+    m_MtxFrame.lock();
+    memcpy(m_transformData.mPtrData, out_data.ptr<uint8_t>(), nPicWidth * nPicHeight * 3);
+    m_transformData.mFrameFmt = CodecImgFormat::FORMAT_BGR;
+
+    m_MtxFrame.unlock();
+  } else {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"),"Only decoding of JPEG is supported");
+    rclcpp::shutdown();
+  }
+
   return 0;
 }
 
@@ -163,7 +162,7 @@ int HobotVdec::ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame)
 }
 
 int HobotVdec::GetOutput(std::shared_ptr<OutputFrameDataType> pOutFrm) {
-  if (CodecStatType::START == codec_stat_ && nullptr != m_transformData.mPtrData && m_status == true) {
+  if (CodecStatType::START == codec_stat_ && nullptr != m_transformData.mPtrData) {
     m_MtxFrame.lock();
     if(m_DataTmp == nullptr) {
       m_DataTmp = new uint8_t[m_transformData.mDataLen];
@@ -175,7 +174,6 @@ int HobotVdec::GetOutput(std::shared_ptr<OutputFrameDataType> pOutFrm) {
     pOutFrm->mDataLen = m_transformData.mDataLen;
     pOutFrm->mFrameFmt = m_transformData.mFrameFmt;
 
-    m_status = false;
     m_MtxFrame.unlock();
     return 0;
   }

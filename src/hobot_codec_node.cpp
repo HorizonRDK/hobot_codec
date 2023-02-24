@@ -576,7 +576,7 @@ void HobotCodecNode::in_hbmem_topic_cb(
     sp_hobot_codec_impl_->Input(mPtrIn, msg->width, msg->height, msg->width * msg->height * 3 / 2, std::make_shared<FrameInfo>(0, time_in, time_now));
   } else {
     //jpeg的解码以及BGR8的编码调用该接口
-    sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data.size(), std::make_shared<FrameInfo>(0, time_in, time_now));    
+    sp_hobot_codec_impl_->Input(msg->data.data(), msg->width, msg->height, msg->data_size, std::make_shared<FrameInfo>(0, time_in, time_now));    
   }
 #endif
 

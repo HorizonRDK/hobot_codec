@@ -38,7 +38,6 @@ class HobotVenc : public HobotCodecBase {
   CodecImgFormat m_enPalType; /*the attribute of gop*/
   CodecImgFormat frame_fmt_ = CodecImgFormat::FORMAT_INVALID;
   OutputFrameDataType m_transformData;
-  bool m_status = false;
   uint8_t * m_DataTmp = nullptr;
   std::mutex m_MtxFrame;
 	float m_fJpgQuality;

@@ -116,35 +116,32 @@ int HobotVenc::Input(const uint8_t *pDataIn, int nPicWidth, int nPicHeight, int 
 		"Codec is not start! codec_stat_: %d", static_cast<int>(codec_stat_));
 		return -1;
   }
-  if(m_status == false) {
-    if (m_enPalType == CodecImgFormat::FORMAT_JPEG || m_enPalType == CodecImgFormat::FORMAT_MJPEG) {
-      cv::Mat src(nPicHeight , nPicWidth, CV_8UC3, (void*)pDataIn);
-      std::vector<uint8_t> buff;
-      std::vector<int> quality;
-      quality.push_back(cv::IMWRITE_JPEG_QUALITY);
-      quality.push_back((int)m_fJpgQuality); 
-      cv::imencode(".jpg", src, buff, quality);
-      
-      if (nullptr == m_transformData.mPtrData) {
-        m_MtxFrame.lock();
-        m_transformData.mPtrData = new uint8_t[buff.size()];
-        m_transformData.mWidth = nPicWidth;
-        m_transformData.mHeight = nPicHeight;
-        m_transformData.mDataLen = buff.size();
-        m_transformData.mFrameFmt = m_enPalType;
-        m_MtxFrame.unlock();
-      } 
-
-      m_MtxFrame.lock();
-      memcpy(m_transformData.mPtrData, reinterpret_cast<void*>(&buff[0]), buff.size());
-      m_status = true;
-      m_MtxFrame.unlock();
-    } else {
-      RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),"Only encoding of JPEG is supported");
-      rclcpp::shutdown();
-    }
+  if (m_enPalType == CodecImgFormat::FORMAT_JPEG || m_enPalType == CodecImgFormat::FORMAT_MJPEG) {
+    cv::Mat src(nPicHeight , nPicWidth, CV_8UC3, (void*)pDataIn);
+    std::vector<uint8_t> buff;
+    std::vector<int> quality;
+    quality.push_back(cv::IMWRITE_JPEG_QUALITY);
+    quality.push_back((int)m_fJpgQuality); 
+    cv::imencode(".jpg", src, buff, quality);
     
-	}
+    if (nullptr == m_transformData.mPtrData) {
+      m_MtxFrame.lock();
+      m_transformData.mPtrData = new uint8_t[nLen];
+      m_transformData.mWidth = nPicWidth;
+      m_transformData.mHeight = nPicHeight;
+      m_transformData.mFrameFmt = m_enPalType;
+      m_MtxFrame.unlock();
+    } 
+
+    m_MtxFrame.lock();
+    m_transformData.mDataLen = buff.size();
+    memcpy(m_transformData.mPtrData, reinterpret_cast<void*>(&buff[0]), buff.size());
+    m_MtxFrame.unlock();
+  } else {
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVenc"),"Only encoding of JPEG is supported");
+    rclcpp::shutdown();
+  }
+
   return 0;
 }
 
@@ -160,10 +157,10 @@ int HobotVenc::ReleaseOutput(const std::shared_ptr<OutputFrameDataType>& pFrame)
 }
 
 int HobotVenc::GetOutput(std::shared_ptr<OutputFrameDataType> pOutFrm) {
-  if (CodecStatType::START == codec_stat_ && nullptr != m_transformData.mPtrData && m_status == true) {
+  if (CodecStatType::START == codec_stat_ && nullptr != m_transformData.mPtrData) {
     m_MtxFrame.lock();
     if(m_DataTmp == nullptr) {
-      m_DataTmp = new uint8_t[m_transformData.mDataLen];
+      m_DataTmp = new uint8_t[m_transformData.mWidth * m_transformData.mHeight *3];
     }
     memcpy(m_DataTmp, m_transformData.mPtrData, m_transformData.mDataLen);
     pOutFrm->mPtrData = m_DataTmp;
@@ -171,7 +168,6 @@ int HobotVenc::GetOutput(std::shared_ptr<OutputFrameDataType> pOutFrm) {
     pOutFrm->mHeight = m_transformData.mHeight;
     pOutFrm->mDataLen = m_transformData.mDataLen;
     pOutFrm->mFrameFmt = m_transformData.mFrameFmt;
-    m_status = false;
     m_MtxFrame.unlock();
     return 0;
   }

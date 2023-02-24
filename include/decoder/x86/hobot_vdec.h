@@ -39,8 +39,7 @@ class HobotVdec : public HobotCodecBase {
   CodecImgFormat frame_fmt_ = CodecImgFormat::FORMAT_INVALID;
   OutputFrameDataType m_transformData;
   uint8_t * m_DataTmp = nullptr;
-  bool m_status = false;
-  std::mutex          m_MtxFrame;
+  std::mutex  m_MtxFrame;
   
  protected:
 

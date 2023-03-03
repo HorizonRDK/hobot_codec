@@ -1,5 +1,10 @@
 # Changelog for package hobot_codec
 
+tros_1.1.6b (2023-03-03)
+------------------
+1. 修复X86版本bgr8->jpeg编码失败的问题
+2. 修复X86版本jpeg->bgr8解码打印ERROR信息的问题
+
 tros_1.1.6a (2023-02-16)
 ------------------
 1. 适配x86版本功能

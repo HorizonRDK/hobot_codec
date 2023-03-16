@@ -206,6 +206,19 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 
 ```
 
+## X86 Ubuntu系统
+编译成功后，执行如下命令运行
+
+```
+source ./install/local_setup.sh
+
+# 图像发布工具发布NV12格式图片
+cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p source_image_w:=960 -p source_image_h:=544
+
+# 编码成jpeg
+ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=False
+```
 
 ## 高级使用范例：
 

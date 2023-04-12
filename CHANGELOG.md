@@ -1,5 +1,9 @@
 # Changelog for package hobot_codec
 
+tros_1.1.7 (2023-04-12)
+------------------
+1. 修复CMakeList中opencv版本问题
+
 tros_1.1.6 (2023-03-16)
 ------------------
 1. 完善README内容

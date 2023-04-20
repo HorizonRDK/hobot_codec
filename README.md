@@ -126,6 +126,7 @@ ros2 run hobot_codec hobot_codec_republish
 
     1、由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
     2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
+    3、当对h264、h265进行解码时，hobot_codec需要从视频第一帧开始解析。
 
 ### 运行方式1，命令方式。
 

@@ -26,11 +26,11 @@ def generate_launch_description():
             description='hobot codec channel'),
         DeclareLaunchArgument(
             'codec_in_mode',
-            default_value='ros',
+            default_value='shared_mem',
             description='image input mode'),
         DeclareLaunchArgument(
             'codec_in_format',
-            default_value='jpeg',
+            default_value='nv12',
             description='image input format'),
         DeclareLaunchArgument(
             'codec_out_mode',
@@ -38,15 +38,15 @@ def generate_launch_description():
             description='image output mode'),
         DeclareLaunchArgument(
             'codec_out_format',
-            default_value='nv12',
+            default_value='jpeg',
             description='image ouput format'),
         DeclareLaunchArgument(
             'codec_sub_topic',
-            default_value='/image_jpeg',
+            default_value='/hbmem_img',
             description='subscribe topic name'),
         DeclareLaunchArgument(
             'codec_pub_topic',
-            default_value='/image_nv12',
+            default_value='/image_jpeg',
             description='publish topic name'),
         DeclareLaunchArgument(
             'codec_enc_qp',

@@ -23,11 +23,12 @@ from launch.substitutions import TextSubstitution
 from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_prefix
 
+
 def generate_launch_description():
     benchmark_img_path = os.path.join(
         get_package_prefix('hobot_codec'),
         'lib/hobot_codec/config')
-    
+
     print("hobot_codec benchmark_img_path is ", benchmark_img_path)
 
     image_source_launch_arg = DeclareLaunchArgument(
@@ -53,7 +54,8 @@ def generate_launch_description():
             executable='hobot_image_pub',
             output='screen',
             parameters=[
-                {"image_source": [benchmark_img_path, "/", LaunchConfiguration('image_source')]},
+                {"image_source": [benchmark_img_path, "/",
+                                  LaunchConfiguration('image_source')]},
                 {"image_format": LaunchConfiguration('image_format')},
                 {"msg_pub_topic_name": "/hbmem_img"},
                 {"output_image_w": 0},

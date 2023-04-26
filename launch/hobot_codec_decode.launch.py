@@ -34,7 +34,7 @@ def generate_launch_description():
             description='image input format'),
         DeclareLaunchArgument(
             'codec_out_mode',
-            default_value='ros',
+            default_value='shared_mem',
             description='image output mode'),
         DeclareLaunchArgument(
             'codec_out_format',
@@ -46,16 +46,8 @@ def generate_launch_description():
             description='subscribe topic name'),
         DeclareLaunchArgument(
             'codec_pub_topic',
-            default_value='/image_nv12',
+            default_value='/hbmem_img',
             description='publish topic name'),
-        DeclareLaunchArgument(
-            'codec_enc_qp',
-            default_value='10.0',
-            description='h264/h265 encoding quality, 0-100'),
-        DeclareLaunchArgument(
-            'codec_jpg_quality',
-            default_value='60.0',
-            description='mjpeg encoding quality, 0-100'),
         DeclareLaunchArgument(
             'codec_input_framerate',
             default_value='30',
@@ -80,8 +72,6 @@ def generate_launch_description():
                 {"out_format": LaunchConfiguration('codec_out_format')},
                 {"sub_topic": LaunchConfiguration('codec_sub_topic')},
                 {"pub_topic": LaunchConfiguration('codec_pub_topic')},
-                {"enc_qp": LaunchConfiguration('codec_enc_qp')},
-                {"jpg_quality": LaunchConfiguration('codec_jpg_quality')},
                 {"input_framerate": LaunchConfiguration('codec_input_framerate')},
                 {"output_framerate": LaunchConfiguration('codec_output_framerate')},
                 {"dump_output": LaunchConfiguration('codec_dump_output')}

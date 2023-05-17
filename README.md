@@ -165,7 +165,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=h265 -p sub_topic:=/hbmem_img -p dump_output:=False
 ~~~
 
-2. 订阅H264视频，解码出NV12格式图片并存储：
+2. 订阅H264视频，解码出NV12格式图片：
 
 ~~~shell
 # 解码成nv12图片
@@ -176,7 +176,7 @@ cp -r /opt/tros/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.h264 -p image_format:=h264
 ~~~
 
-3. 订阅H265视频，解码出NV12格式图片并存储：
+3. 订阅H265视频，解码出NV12格式图片：
 
 ~~~shell
 # 解码成nv12图片
@@ -235,7 +235,7 @@ ros2 launch hobot_codec hobot_codec.launch.py codec_in_mode:=shared_mem codec_in
 
 编译成功后，执行如下命令运行
 
-```
+```shell
 source ./install/local_setup.sh
 
 # 图像发布工具发布NV12格式图片
@@ -250,7 +250,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 
 串联（前一个结点 hobot_codec_republish 为 编码，后面一个 hobot_codec_republish sub 前一个codec 节点的 pub 数据进行解码）测试编解码：
 
-```
+```shell
 export ROS_DOMAIN_ID=***
 # 配置 ROS_DOMAIN_ID，避免多机干扰，每一个 terminal 都需要执行，才可以进行 sub 到数据
 

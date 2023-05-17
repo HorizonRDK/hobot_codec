@@ -6,10 +6,13 @@ Getting Started with hobot_codec
 hobot_codec package用于显示接收 ROS2 Node 发布的image msg。支持ROS标准格式，也支持 share mem 方式订阅，发布 jpg/h264/h265 话题
 
 # Build
+
 ---
+
 ## Dependency
 
 ros package：
+
 - sensor_msgs
 - hbm_img_msgs
 
@@ -41,14 +44,16 @@ rosdep install -i --from-path . --rosdistro foxy -y
 支持在X3 Ubuntu系统上编译和在PC上使用docker交叉编译两种方式。
 
 ### X3 Ubuntu系统板端编译X3版本
+
 1、编译环境确认
 
- - 板端已安装X3 Ubuntu系统。
- - 当前编译终端已设置TogetherROS环境变量：`source PATH/setup.bash`。其中PATH为TogetherROS的安装路径。
- - 已安装ROS2编译工具colcon，安装命令：`pip install -U colcon-common-extensions`
+- 板端已安装X3 Ubuntu系统。
+- 当前编译终端已设置TogetherROS环境变量：`source PATH/setup.bash`。其中PATH为TogetherROS的安装路径。
+- 已安装ROS2编译工具colcon，安装命令：`pip install -U colcon-common-extensions`
 
 2、编译：
-  - `colcon build --packages-select hobot_codec`
+
+- `colcon build --packages-select hobot_codec`
 
 ### docker交叉编译X3版本
 
@@ -59,9 +64,9 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 2、编译
 
-- 编译命令： 
+- 编译命令：
 
-  ```
+  ```shell
   export TARGET_ARCH=aarch64
   export TARGET_TRIPLE=aarch64-linux-gnu
   export CROSS_COMPILE=/usr/bin/$TARGET_TRIPLE-
@@ -73,6 +78,7 @@ rosdep install -i --from-path . --rosdistro foxy -y
      --no-warn-unused-cli \
      -DCMAKE_TOOLCHAIN_FILE=`pwd`/robot_dev_config/aarch64_toolchainfile.cmake
   ```
+
 - 其中SYS_ROOT为交叉编译系统依赖路径，此路径具体地址详见第1步“编译环境确认”的交叉编译说明。
 
 ### X86 Ubuntu系统上编译 X86版本
@@ -84,9 +90,9 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 2、编译
 
-- 编译命令： 
+- 编译命令：
 
-  ```
+  ```shell
   colcon build --packages-select hobot_codec  \
      --merge-install \
      --cmake-args \
@@ -98,14 +104,16 @@ rosdep install -i --from-path . --rosdistro foxy -y
 # Usage
 
 ## X3 Ubuntu系统
+
 编译成功后，将生成的install路径拷贝到地平线X3开发板上（如果是在X3上编译，忽略拷贝步骤），并执行如下命令运行
 
-```
+```shell
 export COLCON_CURRENT_PREFIX=./install
 source ./install/local_setup.sh
 ros2 run hobot_codec hobot_codec_republish
 ```
-### 目前参数列表：
+
+### 目前参数列表
 
 | 参数名           | 含义                         | 取值                                          | 默认值                |
 | ---------------- | ---------------------------- | --------------------------------------------- | --------------------- |
@@ -122,15 +130,16 @@ ros2 run hobot_codec hobot_codec_republish
 | output_framerate | 输出帧率，仅编码模式支持配置 | 正整数，小于等于输入帧率                      | -1（不开启帧率控制）  |
 | dump_output      | 存储编解码输出配置            | True存储，False不存储                          | False                 |
 
-### 注意：
+### 注意
 
     1、由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
     2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
     3、当对h264、h265进行解码时，hobot_codec需要从视频第一帧开始解析。
 
-### 运行方式1，命令方式。
+### 运行方式1，命令方式
 
 1. 订阅MIPI摄像头发布的NV12格式图片，编码成JPEG图片并存储编码后的图片：
+
 ~~~shell
 # MIPI摄像头通过零拷贝发布NV12格式图片
 ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_mem --log-level info
@@ -140,6 +149,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 ~~~
 
 2. 订阅图像发布工具发布的NV12格式图片，测试编码：
+
 ~~~shell
 # 图像发布工具发布NV12格式图片
 cp -r /opt/tros/lib/hobot_image_publisher/config/ .
@@ -156,6 +166,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 ~~~
 
 2. 订阅H264视频，解码出NV12格式图片并存储：
+
 ~~~shell
 # 解码成nv12图片
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
@@ -166,6 +177,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ~~~
 
 3. 订阅H265视频，解码出NV12格式图片并存储：
+
 ~~~shell
 # 解码成nv12图片
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
@@ -176,6 +188,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ~~~
 
 4. 订阅JPEG图片后解码成NV12格式：
+
 ~~~shell
 # 订阅jpeg图片，解码成nv12图片
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=False
@@ -185,9 +198,19 @@ cp -r /opt/tros/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p is_compressed_img_pub:=True -p msg_pub_topic_name:=/image_jpeg
 ~~~
 
+### 运行方式2，使用launch文件启动
 
-### 运行方式2，使用launch文件启动：
-`ros2 launch hobot_codec hobot_codec.launch.py`
+```shell
+source /opt/tros/setup.bash
+
+ros2 launch mipi_cam mipi_cam.launch.py mipi_video_device:=F37
+```
+
+```shell
+source /opt/tros/setup.bash
+
+ros2 launch hobot_codec hobot_codec.launch.py codec_in_mode:=shared_mem codec_in_format:=nv12 codec_out_mode:=ros codec_out_format:=jpeg codec_sub_topic:=/hbmem_img codec_pub_topic:=/image_jpeg
+```
 
 ## X3 linaro系统
 
@@ -199,7 +222,8 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 `export ROS_LOG_DIR=/userdata/`
 
 运行 hobot_codec_republish
-```
+
+```shell
 // 默认参数方式
 /userdata/install/lib/hobot_codec/hobot_codec_republish
 // 传参方式
@@ -208,6 +232,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ```
 
 ## X86 Ubuntu系统
+
 编译成功后，执行如下命令运行
 
 ```
@@ -221,9 +246,10 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=False
 ```
 
-## 高级使用范例：
+## 高级使用范例
 
 串联（前一个结点 hobot_codec_republish 为 编码，后面一个 hobot_codec_republish sub 前一个codec 节点的 pub 数据进行解码）测试编解码：
+
 ```
 export ROS_DOMAIN_ID=***
 # 配置 ROS_DOMAIN_ID，避免多机干扰，每一个 terminal 都需要执行，才可以进行 sub 到数据

@@ -1,5 +1,9 @@
 # Changelog for package hobot_codec
 
+tros_2.1.0 (2023-07-10)
+------------------
+1. 适配J5版本。
+
 tros_2.0.0rc1 (2023-05-23)
 ------------------
 1. 更新readme

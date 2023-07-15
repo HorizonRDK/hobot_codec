@@ -269,7 +269,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p channel:=1 -p in_mode:=
 
 1、测试方法
 
-- 硬件：X3派4G版本，J5 EVM开发板
+- 硬件：RDK X3 4G版本，RDK X5ultra开发板
 
 - 锁定CPU频率：`echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor`
 
@@ -303,7 +303,7 @@ X3派：
 | 编码  |  NV12   |  H264   | 5.5  | 11.0%   |  0.8%   |  30.3   |   30.3  |
 | 编码  |  NV12   |  H265   | 5.7  | 11.0%   |  0.8%   |  30.3   |   30.3  |
 
-J5 EVM：
+RDK X5ultra
 
 | 类型  | 输入格式 | 输出格式 | 耗时 | CPU占用 | 内存占用 | 输入帧率 | 输出帧率 |
 | ----  | ------- | ------- | ---- | ------ | -------- | ------- | ------- |

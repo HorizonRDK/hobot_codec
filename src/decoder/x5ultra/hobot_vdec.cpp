@@ -300,7 +300,7 @@ int HobotVdec::CheckParams(const std::shared_ptr<HobotCodecParaBase>& sp_hobot_c
 
   if ("h264" == sp_hobot_codec_para->in_format_ ||
         "h264" == sp_hobot_codec_para->out_format_) {
-    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "H264 is unsupported for J5 platform!");
+    RCLCPP_ERROR(rclcpp::get_logger("HobotVdec"), "H264 is unsupported for X5ultra platform!");
     return -1;
   }
 

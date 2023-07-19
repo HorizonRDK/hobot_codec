@@ -29,8 +29,8 @@ HobotCodecImpl::HobotCodecImpl() {
 #ifdef PLATFORM_X3
   platform = "platform x3";
 #else
-  #ifdef PLATFORM_X5ultra
-    platform = "platform x5ultra";
+  #ifdef PLATFORM_Rdkultra
+    platform = "platform rdkultra";
   #else
     # ifdef PLATFORM_X86
       platform = "platform x86";

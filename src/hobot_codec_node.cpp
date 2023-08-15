@@ -809,6 +809,7 @@ void HobotCodecNode::timer_ros_pub()
 
   if (!sp_hobot_codec_impl_) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid hobot codec impl");
+    usleep(10000);
     return;
   }
 
@@ -817,6 +818,7 @@ void HobotCodecNode::timer_ros_pub()
     if (rclcpp::ok()) {
       RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"), "GetOutput fail!");
     }
+    usleep(10000);
     return;
   }
 
@@ -897,16 +899,11 @@ void HobotCodecNode::timer_ros_pub()
     if (CodecImgFormat::FORMAT_NV12 == oFrame->mFrameFmt) {
       if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
         int nRgbLen = oFrame->mHeight * oFrame->mWidth * 3;
-        if (nullptr == mPtrOut)
-          mPtrOut = new uint8_t[nRgbLen];
-        if (mPtrOut) {
-          if (0 == out_format_.compare("bgr8")) {
-            video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
-          } else {
-            video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
-          }
-          img_pub_->data.resize(nRgbLen);
-          memcpy(&img_pub_->data[0], mPtrOut, nRgbLen);
+        img_pub_->data.resize(nRgbLen);
+        if (0 == out_format_.compare("bgr8")) {
+          video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, &img_pub_->data[0], oFrame->mWidth , oFrame->mHeight);
+        } else {
+          video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, &img_pub_->data[0], oFrame->mWidth , oFrame->mHeight);
         }
       } else {
         int nOffSet = oFrame->mHeight * oFrame->mWidth;
@@ -1006,6 +1003,7 @@ void HobotCodecNode::timer_hbmem_pub() {
 
   if (!sp_hobot_codec_impl_) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid hobot codec impl");
+    usleep(10000);
     return;
   }
 
@@ -1015,6 +1013,7 @@ void HobotCodecNode::timer_hbmem_pub() {
     if (rclcpp::ok()) {
       RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"), "GetOutput fail!");
     }
+    usleep(10000);
     return;
   }
 
@@ -1092,15 +1091,10 @@ void HobotCodecNode::timer_hbmem_pub() {
         if (0 == out_format_.compare("bgr8") || 0 == out_format_.compare("rgb8")) {
           int nRgbLen = oFrame->mHeight * oFrame->mWidth * 3;
           msg.data_size = nRgbLen;
-          if (nullptr == mPtrOut)
-            mPtrOut = new uint8_t[nRgbLen];
-          if (mPtrOut) {
-            if (0 == out_format_.compare("bgr8")) {
-              video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
-            } else {
-              video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, mPtrOut, oFrame->mWidth , oFrame->mHeight);
-            }
-            memcpy(msg.data.data(), mPtrOut, nRgbLen);
+          if (0 == out_format_.compare("bgr8")) {
+            video_utils::NV12_TO_BGR24(oFrame->mPtrY, oFrame->mPtrUV, msg.data.data(), oFrame->mWidth , oFrame->mHeight);
+          } else {
+            video_utils::NV12_TO_RGB24(oFrame->mPtrY, oFrame->mPtrUV, msg.data.data(), oFrame->mWidth , oFrame->mHeight);
           }
         } else {
           memcpy(msg.data.data(), oFrame->mPtrY, nOffSet);

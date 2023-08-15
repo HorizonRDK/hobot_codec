@@ -139,6 +139,21 @@ std::shared_ptr<OutputFrameDataType> HobotCodecImpl::GetOutput() {
   struct timespec time_now;
   clock_gettime(CLOCK_REALTIME, &time_now);
   pFrame->sp_frame_info->img_processed_ts_ = time_now;
+  while (frame_list_.size() >= 3 ) {
+    sp_codec_base_->ReleaseOutput(pFrame);
+    std::unique_lock<std::mutex> lock_t(frame_mtx_);
+    lock_t.unlock();
+    pFrame->sp_frame_info = frame_list_.front();
+    frame_list_.pop_front();
+    frame_mtx_.unlock();
+    if (0 != sp_codec_base_->GetOutput(pFrame)) {
+      RCLCPP_ERROR(rclcpp::get_logger("HobotCodecImpl"), "GetOutput fail");
+      return nullptr;
+    }
+    struct timespec time_now;
+    clock_gettime(CLOCK_REALTIME, &time_now);
+    pFrame->sp_frame_info->img_processed_ts_ = time_now;
+  }
   return pFrame;
 }
 

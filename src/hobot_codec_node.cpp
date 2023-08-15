@@ -809,7 +809,6 @@ void HobotCodecNode::timer_ros_pub()
 
   if (!sp_hobot_codec_impl_) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid hobot codec impl");
-    usleep(10000);
     return;
   }
 
@@ -818,7 +817,6 @@ void HobotCodecNode::timer_ros_pub()
     if (rclcpp::ok()) {
       RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"), "GetOutput fail!");
     }
-    usleep(10000);
     return;
   }
 
@@ -1003,7 +1001,6 @@ void HobotCodecNode::timer_hbmem_pub() {
 
   if (!sp_hobot_codec_impl_) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Invalid hobot codec impl");
-    usleep(10000);
     return;
   }
 
@@ -1013,7 +1010,6 @@ void HobotCodecNode::timer_hbmem_pub() {
     if (rclcpp::ok()) {
       RCLCPP_WARN_STREAM(rclcpp::get_logger("HobotCodecNode"), "GetOutput fail!");
     }
-    usleep(10000);
     return;
   }
 

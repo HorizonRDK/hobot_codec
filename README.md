@@ -120,7 +120,7 @@ ros2 run hobot_codec hobot_codec_republish
 | channel          | 处理通道号                   | 0-3                                           | 0                     |
 | in_mode          | 接入数据传输的方式           | ros/shared_mem                                | ros                   |
 | out_mode         | 发出数据传输方式             | ros/shared_mem                                | ros                   |
-| in_format        | 订阅的数据格式               | bgr8/rgb8/nv12/jpeg/h264/h265                 | bgr8                  |
+| in_format        | 订阅的数据格式               | bgr8/rgb8/nv12/jpeg/jpeg-compressed/h264/h265 | bgr8                  |
 | out_format       | 处理后发布的数据格式         | bgr8/rgb8/nv12/jpeg/jpeg-compressed/h264/h265 | jpeg                  |
 | sub_topic        | 订阅的话题名字               | 任意字符串，但必须是别的node 发布的topic      | /image_raw            |
 | pub_topic        | 发布的话题名字               | 任意字符串                                    | /image_raw/compressed |
@@ -132,9 +132,11 @@ ros2 run hobot_codec hobot_codec_republish
 
 ### 注意
 
-    1、由于编码器限制，目前可知 jpeg/h264/h265 960*540 不支持， 960*544 可以支持，720P/D1/VGA 系列部分支持。
+    1、编解码要求图像分辨率的width和height都是8字节对齐。
     2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
     3、当对h264、h265进行解码时，hobot_codec需要从视频第一帧开始解析。
+    4、对于非零拷贝数据传输方式（in_mode/out_mode参数取值为ros），当`in_format/out_format`参数取值为`jpeg-compressed`时，订阅/发布的话题数据类型为`sensor_msgs::msg::CompressedImage`；参数取值为`bgr8/rgb8/nv12/jpeg`时，订阅/发布的话题数据类型为`sensor_msgs::msg::Image`。
+
 
 ### 运行方式1，命令方式
 

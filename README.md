@@ -53,7 +53,7 @@ rosdep install -i --from-path . --rosdistro foxy -y
 
 2、编译：
 
-- `colcon build --packages-select hobot_codec`
+- `colcon build --packages-select hobot_codec --cmake-args -DBUILD_HBMEM=ON`，使用编译选项`BUILD_HBMEM`使能了零拷贝数据传输功能。
 
 ### docker交叉编译X3版本
 

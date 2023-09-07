@@ -397,6 +397,9 @@ int HobotCodecNode::init()
         in_sub_topic_, PUB_QUEUE_NUM,
         std::bind(&HobotCodecNode::in_hbmem_topic_cb, this, std::placeholders::_1));
     }
+#else
+    // 编译未使能零拷贝，输入/输出选择了零拷贝
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Unsupport shared mem, refer to README.md to compile!");
 #endif
   }
   
@@ -425,6 +428,9 @@ int HobotCodecNode::init()
       hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
         out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     }
+#else
+    // 编译未使能零拷贝，输入/输出选择了零拷贝
+    RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Unsupport shared mem, refer to README.md to compile!");
 #endif
   }
 

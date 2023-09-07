@@ -1,5 +1,9 @@
 # Changelog for package hobot_codec
 
+tros_2.1.2 (2023-09-06)
+------------------
+1. 配置参数`in_format`（表示订阅的数据格式）新增`jpeg-compressed`配置项，并根据配置项选择订阅的话题数据类型。
+
 tros_2.1.1 (2023-07-14)
 ------------------
 1. 规范Rdkultra产品名。

@@ -128,7 +128,6 @@ class HobotCodecNode : public rclcpp::Node {
 
   // ----------------------------------------------------------------- pub end
   // 订阅主题，进行转换并发布
-  std::string topic_name_compressed_ = "/image_raw/compressed";
   std::string in_sub_topic_ = "/image_raw";
   std::string out_pub_topic_ = "/image_raw/compressed";
   std::string in_mode_ = "ros";

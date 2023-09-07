@@ -39,7 +39,7 @@ const char* out_mode[] = {
 
 //支持订阅的数据格式
 const char* in_format[] = {
-  "bgr8", "rgb8", "nv12", "jpeg", "h264", "h265"
+  "bgr8", "rgb8", "nv12", "jpeg", "jpeg-compressed", "h264", "h265"
 };
 
 //支持的处理后发布数据格式
@@ -182,7 +182,7 @@ void HobotCodecNode::check_params()
   
   if (!IsType(in_format_.c_str(), in_format, 6)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
-    "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'h264' "
+    "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', 'h264' "
     "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
     rclcpp::shutdown();
     return;
@@ -371,11 +371,13 @@ int HobotCodecNode::init()
             in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodecNode::in_ros_h26x_topic_cb, this, std::placeholders::_1));
     } else {
-      if (in_sub_topic_.compare(topic_name_compressed_) != 0) {
+      if (in_format_.compare("jpeg-compressed") != 0) {
+        // in_format_为bgr8/rgb8/nv12/jpeg，订阅消息类型为sensor_msgs::msg::Image
         ros_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
             in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodecNode::in_ros_topic_cb, this, std::placeholders::_1));
       } else {
+        // in_format_为jpeg-compressed，订阅消息类型为sensor_msgs::msg::CompressedImage
         ros_subscription_compressed_ =
             this->create_subscription<sensor_msgs::msg::CompressedImage>(
             in_sub_topic_, PUB_QUEUE_NUM,

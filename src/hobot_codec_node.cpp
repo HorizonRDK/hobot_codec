@@ -21,29 +21,29 @@
 
 #define PUB_QUEUE_NUM 5
 
-const char* enc_types[] = {
+std::vector<const char*> enc_types = {
     "jpeg", "jpeg-compressed", "h264", "h265"};
 
-const char* raw_types[] = {
+std::vector<const char*> raw_types = {
     "bgr8", "rgb8", "nv12"};
 
 //接入数据传输的方式支持的类型
-const char* in_mode[] = {
+std::vector<const char*> in_mode = {
     "ros", "shared_mem"
 };
 
 //发出数据传输方式支持类型
-const char* out_mode[] = {
+std::vector<const char*> out_mode = {
     "ros", "shared_mem"
 };
 
 //支持订阅的数据格式
-const char* in_format[] = {
+std::vector<const char*> in_format = {
   "bgr8", "rgb8", "nv12", "jpeg", "jpeg-compressed", "h264", "h265"
 };
 
 //支持的处理后发布数据格式
-const char* out_format[] = {
+std::vector<const char*> out_format = {
   "bgr8","rgb8","nv12","jpeg","jpeg-compressed","h264","h265"
 };
 
@@ -69,8 +69,9 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
 配置编解码类型及分辨率，目前不支持缩放，过来多大，就处理多大
 多路同时工作，pipeid 需要处理 1-4 路
 */
-int IsType(const char* tsType, const char **fmtTypes, int nArrLen)
+int IsType(const char* tsType, const std::vector<const char*>& fmtTypes)
 {
+  int nArrLen = fmtTypes.size();
   for (int nIdx = 0; nIdx < nArrLen; ++nIdx) {
     RCLCPP_DEBUG(rclcpp::get_logger("HobotCodecNode"),
       "[IsType]->in %s - %d, %s - %d",
@@ -164,7 +165,7 @@ void HobotCodecNode::check_params()
     return;
   }
   
-  if (!IsType(in_mode_.c_str(), in_mode, 2)) {
+  if (!IsType(in_mode_.c_str(), in_mode)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
     "Invalid in_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the in_mode parameter.", in_mode_.c_str());
@@ -172,7 +173,7 @@ void HobotCodecNode::check_params()
     return;
   }
   
-  if (!IsType(out_mode_.c_str(), out_mode, 2)) {
+  if (!IsType(out_mode_.c_str(), out_mode)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
     "Invalid out_mode: %s! 'ros' and 'shared_mem' are supported. "
     "Please check the out_mode parameter.", out_mode_.c_str());
@@ -180,7 +181,7 @@ void HobotCodecNode::check_params()
     return;
   }
   
-  if (!IsType(in_format_.c_str(), in_format, 6)) {
+  if (!IsType(in_format_.c_str(), in_format)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
     "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', 'h264' "
     "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
@@ -188,7 +189,7 @@ void HobotCodecNode::check_params()
     return;
   }
   
-  if (!IsType(out_format_.c_str(), out_format, 7)) {
+  if (!IsType(out_format_.c_str(), out_format)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
     "Invalid out_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', "
     "'h264' and 'h265' are supported. "
@@ -197,15 +198,15 @@ void HobotCodecNode::check_params()
     return;
   }
 
-  if(IsType(in_format_.c_str(), enc_types, 4)) {
-    if(!IsType(out_format_.c_str(), raw_types,3)) { // 输入为编码格式，输出必须为raw格式
+  if(IsType(in_format_.c_str(), enc_types)) {
+    if(!IsType(out_format_.c_str(), raw_types)) { // 输入为编码格式，输出必须为raw格式
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
         "%s cannot be decoded to %s", in_format_.c_str(), out_format_.c_str());
       rclcpp::shutdown();
       return;
     }
-  } else if(IsType(in_format_.c_str(), raw_types,3)) {
-    if(!IsType(out_format_.c_str(), enc_types, 4)) { // 输入为raw格式，输出必须为编码格式
+  } else if(IsType(in_format_.c_str(), raw_types)) {
+    if(!IsType(out_format_.c_str(), enc_types)) { // 输入为raw格式，输出必须为编码格式
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
         "%s cannot be encoded to %s", in_format_.c_str(), out_format_.c_str());
       rclcpp::shutdown();
@@ -213,7 +214,7 @@ void HobotCodecNode::check_params()
     }
   }
 
-  if (IsType(out_format_.c_str(), enc_types, 4)) {
+  if (IsType(out_format_.c_str(), enc_types)) {
     if (enc_qp_ < 0 || enc_qp_ > 100) {
       RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
       "Invalid enc_qp: %f! The value range is floating point number from 0 to 100."
@@ -334,7 +335,7 @@ int HobotCodecNode::init()
 
   // 收到数据才可以知道 宽高，才能真正创建
   // 此处只创建实例，订阅到消息后根据具体分辨率进行codec的初始化
-  if (IsType(out_format_.c_str(), enc_types, 4)) {
+  if (IsType(out_format_.c_str(), enc_types)) {
     // 输出是压缩格式，需要创建编码器
     sp_hobot_codec_data_info_->hobot_codec_type = HobotCodecType::ENCODER;
     sp_hobot_codec_data_info_->jpg_quality_ = jpg_quality_;

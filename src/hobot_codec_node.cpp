@@ -18,6 +18,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "include/video_utils.hpp"
 #include "hobot_codec_node.h"
+#include "rclcpp_components/register_node_macro.hpp"
 
 #define PUB_QUEUE_NUM 5
 
@@ -1258,3 +1259,5 @@ std::shared_ptr<RunTimeData> RunTimeStat::Get(int time_interval_ms) {
   }
   return nullptr;
 }
+
+RCLCPP_COMPONENTS_REGISTER_NODE(HobotCodecNode)

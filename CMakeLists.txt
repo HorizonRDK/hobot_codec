@@ -47,6 +47,7 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(img_msgs REQUIRED)
+find_package(rclcpp_components REQUIRED)
 
 # x3|rdkultra|x86
 set(PREFIX_PATH x3)
@@ -93,6 +94,15 @@ add_executable(hobot_codec_republish
   src/encoder/${PREFIX_PATH}/hobot_venc.cpp
 )
 
+add_library(hobot_codec_component SHARED
+  src/example.cpp
+  src/hobot_codec_node.cpp
+  src/hobot_codec_impl.cpp
+  src/hobot_codec_base.cpp
+  src/decoder/${PREFIX_PATH}/hobot_vdec.cpp
+  src/encoder/${PREFIX_PATH}/hobot_venc.cpp
+)
+
 set(BASE_LIBRARIES pthread dl)
 # 根据平台选择需要链接的库
 if(PLATFORM_X3)
@@ -118,6 +128,7 @@ ament_target_dependencies(
   sensor_msgs
   img_msgs
   hbm_img_msgs
+  rclcpp_components
 )
 else()
 ament_target_dependencies(
@@ -125,11 +136,27 @@ ament_target_dependencies(
   rclcpp
   img_msgs
   sensor_msgs
+  rclcpp_components
 )
 endif()
 
 target_link_libraries(hobot_codec_republish
 )
+
+target_compile_definitions(hobot_codec_component
+  PRIVATE "COMPOSITION_BUILDING_DLL")
+target_link_libraries(hobot_codec_component
+  ${BASE_LIBRARIES} ${SYS_LIB}
+)
+ament_target_dependencies(hobot_codec_component
+  rclcpp
+  img_msgs
+  sensor_msgs
+  rclcpp_components
+  )
+rclcpp_components_register_nodes(hobot_codec_component "HobotCodecNode")
+set(node_plugins "${node_plugins}HobotCodecNode;$<TARGET_FILE:hobot_codec_component>\n")
+
 
 # Install executables
 install(
@@ -150,5 +177,11 @@ install(DIRECTORY
   ${PROJECT_SOURCE_DIR}/config/
   DESTINATION lib/${PROJECT_NAME}/config/
 )
+
+install(TARGETS
+hobot_codec_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
 
 ament_package()

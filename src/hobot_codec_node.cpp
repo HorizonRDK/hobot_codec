@@ -49,15 +49,15 @@ std::vector<const char*> out_format = {
 };
 
 // 返回ms
-int32_t tool_calc_time_laps(const struct timespec &time_start, const struct timespec &time_end)
+float tool_calc_time_laps(const struct timespec &time_start, const struct timespec &time_end)
 {
-  int32_t nRetMs = 0;
+  float nRetMs = 0;
   if (time_end.tv_nsec < time_start.tv_nsec)
   {
     nRetMs = (time_end.tv_sec - time_start.tv_sec - 1) * 1000 +
-     (1000000000 + time_end.tv_nsec - time_start.tv_nsec) / 1000000;
+     float((1000000000 + time_end.tv_nsec - time_start.tv_nsec) / 1000) / 1000.0;
   } else {
-    nRetMs = (time_end.tv_sec - time_start.tv_sec) * 1000 + (time_end.tv_nsec - time_start.tv_nsec) / 1000000;
+    nRetMs = (time_end.tv_sec - time_start.tv_sec) * 1000 + float((time_end.tv_nsec - time_start.tv_nsec) / 1000) / 1000.0;
   }
   return nRetMs;
 }
@@ -291,6 +291,8 @@ HobotCodecNode::HobotCodecNode(const rclcpp::NodeOptions& node_options,
   this->declare_parameter("output_framerate", -1);
   this->declare_parameter("dump_output", false);
 
+  // TODO 2023/12/6
+  // 以component形式被load之后，会导致component manager的service异常
   // 更新配置参数
   get_params();
 
@@ -304,6 +306,9 @@ HobotCodecNode::HobotCodecNode(const rclcpp::NodeOptions& node_options,
     rclcpp::shutdown();
     return;
   }
+  
+  RCLCPP_INFO(rclcpp::get_logger("HobotVdecNode"),
+  "constructer complete");
 }
 
 HobotCodecNode::~HobotCodecNode()
@@ -370,19 +375,20 @@ int HobotCodecNode::init()
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
       ros_subscrip_h26x_ = this->create_subscription<img_msgs::msg::H26XFrame>(
-            in_sub_topic_, PUB_QUEUE_NUM,
+            in_sub_topic_, rclcpp::SensorDataQoS(),
             std::bind(&HobotCodecNode::in_ros_h26x_topic_cb, this, std::placeholders::_1));
     } else {
       if (in_format_.compare("jpeg-compressed") != 0) {
         // in_format_为bgr8/rgb8/nv12/jpeg，订阅消息类型为sensor_msgs::msg::Image
         ros_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
-            in_sub_topic_, PUB_QUEUE_NUM,
+            in_sub_topic_, rclcpp::SensorDataQoS(),
             std::bind(&HobotCodecNode::in_ros_topic_cb, this, std::placeholders::_1));
+
       } else {
         // in_format_为jpeg-compressed，订阅消息类型为sensor_msgs::msg::CompressedImage
         ros_subscription_compressed_ =
             this->create_subscription<sensor_msgs::msg::CompressedImage>(
-            in_sub_topic_, PUB_QUEUE_NUM,
+            in_sub_topic_, rclcpp::SensorDataQoS(),
             std::bind(&HobotCodecNode::in_ros_compressed_cb, this,
                       std::placeholders::_1));
       }
@@ -392,11 +398,11 @@ int HobotCodecNode::init()
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
       hbmemH26x_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
-        in_sub_topic_, PUB_QUEUE_NUM,
+        in_sub_topic_, rclcpp::SensorDataQoS(),
         std::bind(&HobotCodecNode::in_hbmemh264_topic_cb, this, std::placeholders::_1));
     } else {
       hbmem_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
-        in_sub_topic_, PUB_QUEUE_NUM,
+        in_sub_topic_, rclcpp::SensorDataQoS(),
         std::bind(&HobotCodecNode::in_hbmem_topic_cb, this, std::placeholders::_1));
     }
 #else
@@ -522,6 +528,14 @@ void HobotCodecNode::in_hbmem_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+
+  RCLCPP_INFO_STREAM(rclcpp::get_logger("HobotCodecNode"),
+  "recved img fmt: " << msg->encoding.data()
+  << ", w: " << msg->width << ", h: " << msg->height
+  << ", ts: " << msg->time_stamp.sec
+  << "." << msg->time_stamp.nanosec
+  << ", comm delay: " << tool_calc_time_laps(time_in, time_now));
+  return;
 
   std::stringstream ss;
   ss << "recved img"
@@ -692,6 +706,15 @@ void HobotCodecNode::in_ros_topic_cb(
   std::unique_lock<std::mutex> timestamp_lk(timestamp_mtx);
   get_image_time = mNow;
   timestamp_lk.unlock();
+
+
+  RCLCPP_INFO_STREAM(rclcpp::get_logger("HobotCodecNode"),
+  "recved img fmt: " << msg->encoding
+  << ", w: " << msg->width << ", h: " << msg->height
+  << ", ts: " << msg->header.stamp.sec << "." << msg->header.stamp.nanosec
+  << ", comm delay: " << tool_calc_time_laps(time_in, time_now));
+  return;
+
 
   if (0 != in_format_.compare(reinterpret_cast<const char*>(msg->encoding.data()))) {
     RCLCPP_WARN(rclcpp::get_logger("HobotCodecNode"), "[%s]->infmt err %s-%s",

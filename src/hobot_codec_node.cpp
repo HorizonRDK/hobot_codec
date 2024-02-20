@@ -535,6 +535,7 @@ void HobotCodecNode::in_hbmem_topic_cb(
   << ", ts: " << msg->time_stamp.sec
   << "." << msg->time_stamp.nanosec
   << ", comm delay: " << tool_calc_time_laps(time_in, time_now));
+  
   return;
 
   std::stringstream ss;
@@ -688,7 +689,7 @@ void HobotCodecNode::in_ros_h26x_topic_cb(
 }
 
 void HobotCodecNode::in_ros_topic_cb(
-    const sensor_msgs::msg::Image::ConstSharedPtr msg) {
+    const sensor_msgs::msg::Image::UniquePtr msg) {
   if (!rclcpp::ok()) {
     return;
   }
@@ -707,6 +708,7 @@ void HobotCodecNode::in_ros_topic_cb(
   get_image_time = mNow;
   timestamp_lk.unlock();
 
+  printf("recved image: [0x%x], ts: [%ld.%ld]\n", msg.get(), msg->header.stamp.sec, msg->header.stamp.nanosec);
 
   RCLCPP_INFO_STREAM(rclcpp::get_logger("HobotCodecNode"),
   "recved img fmt: " << msg->encoding

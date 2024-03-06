@@ -86,6 +86,6 @@ def generate_launch_description():
                 {"output_framerate": LaunchConfiguration('codec_output_framerate')},
                 {"dump_output": LaunchConfiguration('codec_dump_output')}
             ],
-            arguments=['--ros-args', '--log-level', 'error']
+            arguments=['--ros-args', '--log-level', 'warn']
         ),
     ])

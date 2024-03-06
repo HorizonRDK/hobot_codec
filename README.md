@@ -120,8 +120,8 @@ ros2 run hobot_codec hobot_codec_republish
 | channel          | 处理通道号                   | 0-3                                           | 0                     |
 | in_mode          | 接入数据传输的方式           | ros/shared_mem                                | ros                   |
 | out_mode         | 发出数据传输方式             | ros/shared_mem                                | ros                   |
-| in_format        | 订阅的数据格式               | bgr8/rgb8/nv12/jpeg/jpeg-compressed/h264/h265 | bgr8                  |
-| out_format       | 处理后发布的数据格式         | bgr8/rgb8/nv12/jpeg/jpeg-compressed/h264/h265 | jpeg                  |
+| in_format        | 订阅的数据格式               | bgr8/rgb8/nv12/jpeg/h264/h265 | bgr8                  |
+| out_format       | 处理后发布的数据格式         | bgr8/rgb8/nv12/jpeg/h264/h265 | jpeg                  |
 | sub_topic        | 订阅的话题名字               | 任意字符串，但必须是别的node 发布的topic      | /image_raw            |
 | pub_topic        | 发布的话题名字               | 任意字符串                                    | /image_raw/compressed |
 | enc_qp           | 264/265编码质量              | 浮点数 0-100                                  | 10.0                  |
@@ -135,7 +135,7 @@ ros2 run hobot_codec hobot_codec_republish
     1、编解码要求图像分辨率的width和height都是8字节对齐。
     2、X86版本仅支持bgr8/rgb8/nv12与jpeg的相互转换。
     3、当对h264、h265进行解码时，hobot_codec需要从视频第一帧开始解析。
-    4、对于非零拷贝数据传输方式（in_mode/out_mode参数取值为ros），当`in_format/out_format`参数取值为`jpeg-compressed`时，订阅/发布的话题数据类型为`sensor_msgs::msg::CompressedImage`；参数取值为`bgr8/rgb8/nv12/jpeg`时，订阅/发布的话题数据类型为`sensor_msgs::msg::Image`。
+    4、对于非零拷贝数据传输方式（in_mode/out_mode参数取值为ros），当`in_format/out_format`参数取值为`jpeg`时，订阅/发布的话题数据类型为`sensor_msgs::msg::CompressedImage`；参数取值为`bgr8/rgb8/nv12`时，订阅/发布的话题数据类型为`sensor_msgs::msg::Image`。
 
 
 ### 运行方式1，命令方式
@@ -154,7 +154,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 
 ~~~shell
 # 图像发布工具发布NV12格式图片
-cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p source_image_w:=960 -p source_image_h:=544
 
 # 编码成jpeg
@@ -174,7 +174,7 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h264 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 图像发布工具发布h264视频
-cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.h264 -p image_format:=h264
 ~~~
 
@@ -185,7 +185,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=h265 -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/hbmem_img -p dump_output:=False
 
 # 图像发布工具发布h265视频
-cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/sky.h265 -p image_format:=h265
 ~~~
 
@@ -196,7 +196,7 @@ ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./con
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=jpeg -p out_mode:=shared_mem -p out_format:=nv12 -p sub_topic:=/image_jpeg -p dump_output:=False
 
 # 图像发布工具发布JPEG格式图片
-cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p is_compressed_img_pub:=True -p msg_pub_topic_name:=/image_jpeg
 ~~~
 
@@ -241,7 +241,7 @@ ros2 launch hobot_codec hobot_codec.launch.py codec_in_mode:=shared_mem codec_in
 source ./install/local_setup.sh
 
 # 图像发布工具发布NV12格式图片
-cp -r /opt/tros/lib/hobot_image_publisher/config/ .
+cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p source_image_w:=960 -p source_image_h:=544
 
 # 编码成jpeg

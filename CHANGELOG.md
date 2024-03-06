@@ -1,5 +1,12 @@
 # Changelog for package hobot_codec
 
+tros_2.1.4 (2024-3-6)
+------------------
+1. 订阅的数据格式`in_format`和处理后发布的数据格式`out_format`配置参数删除`jpeg-compressed`配置选项，统一使用`jpeg`配置选项指定发布`jpeg`压缩格式图片。
+2. `jpeg`压缩格式图片使用的数据类型由`sensor_msgs::msg::Image`变更为`sensor_msgs::msg::CompressedImage`。
+3. 更新README，拷贝的配置文件路径由`/opt/tros/lib`变更为`/opt/tros/${TROS_DISTRO}/lib`。
+4. launch启动脚本中的`log-level`由`error`变更为`warn`。
+
 tros_2.1.3 (2023-11-02)
 ------------------
 1. 优化类型检查逻辑，修复`in_format`为`h265`时检查失败的问题，同时提升类型的可扩展性。

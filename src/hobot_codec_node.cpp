@@ -22,7 +22,7 @@
 #define PUB_QUEUE_NUM 5
 
 std::vector<const char*> enc_types = {
-    "jpeg", "jpeg-compressed", "h264", "h265"};
+    "jpeg", "h264", "h265"};
 
 std::vector<const char*> raw_types = {
     "bgr8", "rgb8", "nv12"};
@@ -39,12 +39,12 @@ std::vector<const char*> out_mode = {
 
 //支持订阅的数据格式
 std::vector<const char*> in_format = {
-  "bgr8", "rgb8", "nv12", "jpeg", "jpeg-compressed", "h264", "h265"
+  "bgr8", "rgb8", "nv12", "jpeg", "h264", "h265"
 };
 
 //支持的处理后发布数据格式
 std::vector<const char*> out_format = {
-  "bgr8","rgb8","nv12","jpeg","jpeg-compressed","h264","h265"
+  "bgr8","rgb8","nv12","jpeg","h264","h265"
 };
 
 // 返回ms
@@ -62,9 +62,6 @@ int32_t tool_calc_time_laps(const struct timespec &time_start, const struct time
 }
 
 // 解析命令，创建编解码器，发布接收节点
-// ros2 run hobot_codec hobot_codec_republish ros jpeg decompress rgb8 --ros-args
-// -p sub_topic:=/image_raw/compressed -p pub_topic:=/image_raw
-// app trans_mode in_format work_mode in_topic:= out_topic:= out_format
 /*
 配置编解码类型及分辨率，目前不支持缩放，过来多大，就处理多大
 多路同时工作，pipeid 需要处理 1-4 路
@@ -183,7 +180,7 @@ void HobotCodecNode::check_params()
   
   if (!IsType(in_format_.c_str(), in_format)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
-    "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', 'h264' "
+    "Invalid in_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'h264' "
     "and 'h265' are supported. Please check the in_format parameter.", in_format_.c_str());
     rclcpp::shutdown();
     return;
@@ -191,7 +188,7 @@ void HobotCodecNode::check_params()
   
   if (!IsType(out_format_.c_str(), out_format)) {
     RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"),
-    "Invalid out_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', 'jpeg-compressed', "
+    "Invalid out_format: %s! 'bgr8', 'rgb8', 'nv12', 'jpeg', "
     "'h264' and 'h265' are supported. "
     "Please check the out_format parameter.", out_format_.c_str());
     rclcpp::shutdown();
@@ -372,13 +369,13 @@ int HobotCodecNode::init()
             in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodecNode::in_ros_h26x_topic_cb, this, std::placeholders::_1));
     } else {
-      if (in_format_.compare("jpeg-compressed") != 0) {
-        // in_format_为bgr8/rgb8/nv12/jpeg，订阅消息类型为sensor_msgs::msg::Image
+      if (in_format_.compare("jpeg") != 0) {
+        // in_format_为bgr8/rgb8/nv12，订阅消息类型为sensor_msgs::msg::Image
         ros_subscription_ = this->create_subscription<sensor_msgs::msg::Image>(
             in_sub_topic_, PUB_QUEUE_NUM,
             std::bind(&HobotCodecNode::in_ros_topic_cb, this, std::placeholders::_1));
       } else {
-        // in_format_为jpeg-compressed，订阅消息类型为sensor_msgs::msg::CompressedImage
+        // in_format_为jpeg，订阅消息类型为sensor_msgs::msg::CompressedImage
         ros_subscription_compressed_ =
             this->create_subscription<sensor_msgs::msg::CompressedImage>(
             in_sub_topic_, PUB_QUEUE_NUM,
@@ -411,7 +408,7 @@ int HobotCodecNode::init()
       0 == out_format_.compare("h265") ) {
       ros_h26ximage_publisher_ = this->create_publisher<img_msgs::msg::H26XFrame>(
         out_pub_topic_.c_str(), PUB_QUEUE_NUM);
-    } else if (0 == out_format_.compare("jpeg-compressed")) {
+    } else if (0 == out_format_.compare("jpeg")) {
       ros_compressed_image_publisher_ =
           this->create_publisher<sensor_msgs::msg::CompressedImage>(
               out_pub_topic_, PUB_QUEUE_NUM);
@@ -863,12 +860,11 @@ void HobotCodecNode::timer_ros_pub()
       << "." << frameh26x_sub_->dts.nanosec;
 
     ros_h26ximage_publisher_->publish(*frameh26x_sub_);
-  } else if (0 == out_format_.compare("jpeg-compressed")) {
+  } else if (0 == out_format_.compare("jpeg")) {
     compressed_img_pub_->header.stamp.sec = oFrame->sp_frame_info->img_ts_.tv_sec;
     compressed_img_pub_->header.stamp.nanosec = oFrame->sp_frame_info->img_ts_.tv_nsec;
     compressed_img_pub_->header.frame_id = "default_cam";
     compressed_img_pub_->format = "jpeg";
-    // compressed_img_pub_->format = "rgb8; jpeg compressed bgr8";
 
     compressed_img_pub_->data.resize(oFrame->mDataLen);
     memcpy(compressed_img_pub_->data.data(), oFrame->mPtrData,
@@ -1252,7 +1248,7 @@ std::shared_ptr<RunTimeData> RunTimeStat::Get(int time_interval_ms) {
     run_time_data->out_frame_count_ = run_time_data_.out_frame_count_ /
                 (static_cast<float>(interval) / 1000.0);
     
-    memset(&run_time_data_, 0, sizeof(RunTimeData));
+    run_time_data_ = RunTimeData();
     *last_frame_tp_ = std::chrono::system_clock::now();
     return run_time_data;
   }

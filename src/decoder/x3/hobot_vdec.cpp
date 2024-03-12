@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fstream"
 #include "rclcpp/rclcpp.hpp"
 #include "hobot_vdec.h"
 #include "decoder/hobot_decoder_common.hpp"

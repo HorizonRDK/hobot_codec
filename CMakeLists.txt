@@ -29,14 +29,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# BUILD_HBMEM is set in aarch64_toolchainfile.cmake
-if (${BUILD_HBMEM})
-  message("using shared mem")
-  find_package(hbm_img_msgs REQUIRED)
-  add_definitions(-DSHARED_MEM_MSG)
-else()
-  message("not using shared mem")
-endif ()
+find_package(hbm_img_msgs REQUIRED)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
@@ -111,7 +104,6 @@ target_link_libraries(hobot_codec_republish
   ${BASE_LIBRARIES} ${SYS_LIB}
 )
 
-if (${BUILD_HBMEM})
 ament_target_dependencies(
   hobot_codec_republish
   rclcpp
@@ -119,14 +111,6 @@ ament_target_dependencies(
   img_msgs
   hbm_img_msgs
 )
-else()
-ament_target_dependencies(
-  hobot_codec_republish
-  rclcpp
-  img_msgs
-  sensor_msgs
-)
-endif()
 
 target_link_libraries(hobot_codec_republish
 )

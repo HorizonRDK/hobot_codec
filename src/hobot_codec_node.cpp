@@ -384,21 +384,16 @@ int HobotCodecNode::init()
       }
     }
   } else {
-#ifdef SHARED_MEM_MSG
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
-      hbmemH26x_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
+      hbmemH26x_subscription_ = this->create_subscription<hbm_img_msgs::msg::HbmH26XFrame>(
         in_sub_topic_, PUB_QUEUE_NUM,
         std::bind(&HobotCodecNode::in_hbmemh264_topic_cb, this, std::placeholders::_1));
     } else {
-      hbmem_subscription_ = this->create_subscription_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
+      hbmem_subscription_ = this->create_subscription<hbm_img_msgs::msg::HbmMsg1080P>(
         in_sub_topic_, PUB_QUEUE_NUM,
         std::bind(&HobotCodecNode::in_hbmem_topic_cb, this, std::placeholders::_1));
     }
-#else
-    // 编译未使能零拷贝，输入/输出选择了零拷贝
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Unsupport shared mem, refer to README.md to compile!");
-#endif
   }
   
   // 创建消息的发布者
@@ -417,19 +412,14 @@ int HobotCodecNode::init()
     }
   } else {
     is_sharedmem_pub = true;
-#ifdef SHARED_MEM_MSG
     if (0 == out_format_.compare("h264") ||
       0 == out_format_.compare("h265") ) {
-      h264hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmH26XFrame>(
+      h264hbmem_publisher_ = this->create_publisher<hbm_img_msgs::msg::HbmH26XFrame>(
         out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     } else {
-      hbmem_publisher_ = this->create_publisher_hbmem<hbm_img_msgs::msg::HbmMsg1080P>(
+      hbmem_publisher_ = this->create_publisher<hbm_img_msgs::msg::HbmMsg1080P>(
         out_pub_topic_.c_str(), PUB_QUEUE_NUM);
     }
-#else
-    // 编译未使能零拷贝，输入/输出选择了零拷贝
-    RCLCPP_ERROR(rclcpp::get_logger("HobotCodecNode"), "Unsupport shared mem, refer to README.md to compile!");
-#endif
   }
 
   // 创建发布线程
@@ -449,7 +439,6 @@ void HobotCodecNode::exec_loopPub(bool is_sharedmem_pub) {
   }
 }
 
-#ifdef SHARED_MEM_MSG
 void HobotCodecNode::in_hbmemh264_topic_cb(
     const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg) {
   if (!rclcpp::ok()) {
@@ -600,7 +589,6 @@ void HobotCodecNode::in_hbmem_topic_cb(
     << ", Input delay ms: " << sp_run_time_data->in_codec_delay_;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
 }
-#endif
 
 void HobotCodecNode::in_ros_h26x_topic_cb(
     const img_msgs::msg::H26XFrame::ConstSharedPtr msg) {
@@ -1014,7 +1002,6 @@ void HobotCodecNode::timer_hbmem_pub() {
     return;
   }
 
-#ifdef SHARED_MEM_MSG
   auto oFrame = sp_hobot_codec_impl_->GetOutput();
   if (!oFrame) {
     if (rclcpp::ok()) {
@@ -1197,7 +1184,6 @@ if(oFrame->mPtrData != nullptr)
   ss << ", codec delay ms: "
     << sp_run_time_data->out_codec_delay_;
   RCLCPP_INFO(rclcpp::get_logger("HobotCodecNode"), "%s", ss.str().data());
-#endif
 }
 
 int RunTimeStat::Update(std::shared_ptr<RunTimeData> sp_run_time_data) {

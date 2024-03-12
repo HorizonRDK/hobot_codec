@@ -24,10 +24,8 @@
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include "img_msgs/msg/h26_x_frame.hpp"
 
-#ifdef SHARED_MEM_MSG
 #include "hbm_img_msgs/msg/hbm_msg1080_p.hpp"
 #include "hbm_img_msgs/msg/hbm_h26_x_frame.hpp"
-#endif
 
 #include "include/hobot_codec_impl.h"
 
@@ -93,31 +91,25 @@ class HobotCodecNode : public rclcpp::Node {
     ros_subscription_compressed_ = nullptr;
   void in_ros_compressed_cb(const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg);
 
-#ifdef SHARED_MEM_MSG
   int32_t mSendIdx = 0;
-  rclcpp::SubscriptionHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr
+  rclcpp::Subscription<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr
       hbmem_subscription_ = nullptr;
-  rclcpp::SubscriptionHbmem<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr
+  rclcpp::Subscription<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr
       hbmemH26x_subscription_;
-#endif
   void in_ros_topic_cb(const sensor_msgs::msg::Image::ConstSharedPtr msg);
   void in_ros_h26x_topic_cb(const img_msgs::msg::H26XFrame::ConstSharedPtr msg);
 
-#ifdef SHARED_MEM_MSG
   void in_hbmem_topic_cb(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
   void in_hbmemh264_topic_cb(const hbm_img_msgs::msg::HbmH26XFrame::ConstSharedPtr msg);
-#endif
   // shared image message
   sensor_msgs::msg::Image::UniquePtr img_pub_ = nullptr;
   sensor_msgs::msg::CompressedImage::UniquePtr compressed_img_pub_ = nullptr;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr ros_image_publisher_ = nullptr;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr ros_compressed_image_publisher_ = nullptr;
 
-#ifdef SHARED_MEM_MSG
   rclcpp::TimerBase::SharedPtr timer_hbmem_ = nullptr;
-  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr hbmem_publisher_ = nullptr;
-  rclcpp::PublisherHbmem<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr h264hbmem_publisher_ = nullptr;
-#endif
+  rclcpp::Publisher<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr hbmem_publisher_ = nullptr;
+  rclcpp::Publisher<hbm_img_msgs::msg::HbmH26XFrame>::SharedPtr h264hbmem_publisher_ = nullptr;
   void timer_ros_pub();
   void timer_hbmem_pub();
   //获取启动参数

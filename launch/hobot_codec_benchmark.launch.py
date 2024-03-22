@@ -22,7 +22,9 @@ from launch_ros.actions import Node
 from launch.substitutions import TextSubstitution
 from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_prefix
-
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python import get_package_share_directory
 
 def generate_launch_description():
     benchmark_img_path = os.path.join(
@@ -49,6 +51,13 @@ def generate_launch_description():
         image_format_launch_arg,
         codec_in_format_launch_arg,
         codec_out_format_launch_arg,
+        # 启动零拷贝环境配置node
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory('hobot_shm'),
+                    'launch/hobot_shm.launch.py'))
+        ),
         Node(
             package='hobot_image_publisher',
             executable='hobot_image_pub',

@@ -15,6 +15,7 @@
 #include <sys/times.h>
 #include <string>
 #include <fstream>
+#include <iomanip>
 #include "rclcpp/rclcpp.hpp"
 #include "rcpputils/env.hpp"
 #include "rcutils/env.h"
@@ -1000,8 +1001,9 @@ if(oFrame->mPtrData != nullptr)
     << ", fps: " << sp_rt_data->in_frame_count_
     << ", pub " << out_format_
     << ", fps: " << sp_rt_data->out_frame_count_
-    << ", comm delay: " << sp_rt_data->in_comm_delay_
-    << ", codec delay: " << sp_rt_data->out_codec_delay_
+    << std::fixed << std::setprecision(4)
+    << ", comm delay [" << sp_rt_data->in_comm_delay_ << "]ms"
+    << ", codec delay [" << sp_rt_data->out_codec_delay_ << "]ms"
     );
   }
 
@@ -1194,8 +1196,9 @@ if(oFrame->mPtrData != nullptr)
     << ", fps: " << sp_rt_data->in_frame_count_
     << ", pub " << out_format_
     << ", fps: " << sp_rt_data->out_frame_count_
-    << ", comm delay: " << sp_rt_data->in_comm_delay_
-    << ", codec delay: " << sp_rt_data->out_codec_delay_
+    << std::fixed << std::setprecision(4)
+    << ", comm delay [" << sp_rt_data->in_comm_delay_ << "]ms"
+    << ", codec delay [" << sp_rt_data->out_codec_delay_ << "]ms"
     );
   }
     

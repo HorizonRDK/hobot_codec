@@ -16,6 +16,8 @@
 #include <string>
 #include <fstream>
 #include "rclcpp/rclcpp.hpp"
+#include "rcpputils/env.hpp"
+#include "rcutils/env.h"
 #include "include/video_utils.hpp"
 #include "hobot_codec_node.h"
 
@@ -384,6 +386,22 @@ int HobotCodecNode::init()
       }
     }
   } else {
+    std::string ros_zerocopy_env = rcpputils::get_env_var("RMW_FASTRTPS_USE_QOS_FROM_XML");
+    if (ros_zerocopy_env.empty()) {
+      RCLCPP_ERROR_STREAM(this->get_logger(),
+        "Launching with zero-copy, but env of `RMW_FASTRTPS_USE_QOS_FROM_XML` is not set. "
+        << "Transporting data without zero-copy!");
+    } else {
+      if ("1" == ros_zerocopy_env) {
+        RCLCPP_WARN_STREAM(this->get_logger(), "Enabling zero-copy");
+      } else {
+        RCLCPP_ERROR_STREAM(this->get_logger(),
+          "env of `RMW_FASTRTPS_USE_QOS_FROM_XML` is [" << ros_zerocopy_env
+          << "], which should be set to 1. "
+          << "Data transporting without zero-copy!");
+      }
+    }
+
     if ((std::string::npos != in_format_.find("h264")) ||
       (std::string::npos != in_format_.find("h265"))) {
       hbmemH26x_subscription_ = this->create_subscription<hbm_img_msgs::msg::HbmH26XFrame>(

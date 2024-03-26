@@ -99,7 +99,8 @@ Support compiling on X3 Ubuntu system and using docker cross-compilation on PC.
      --cmake-args \
      -DPLATFORM_X86=ON \
      -DTHIRD_PARTY=`pwd`/../sysroot_docker
-```# Usage
+  ```
+# Usage
 
 ## X3 Ubuntu System
 
@@ -130,10 +131,10 @@ ros2 run hobot_codec hobot_codec_republish
 
 ### Notes
 
-    1. The encoding and decoding require the image resolution's width and height to be aligned with 8 bytes.
-    2. The X86 version only supports mutual conversion between bgr8/rgb8/nv12 and jpeg.
-    3. When decoding h264 or h265, hobot_codec needs to start parsing from the first frame of the video.
-    4. For non-zero copy data transmission methods (when in_mode/out_mode parameters are set to ros), when `in_format/out_format` parameters are set to `jpeg`, the data type of the subscribed/published topic is `sensor_msgs::msg::CompressedImage`; when parameters are set to `bgr8/rgb8/nv12`, the data type of the subscribed/published topic is `sensor_msgs::msg::Image`.
+1. The encoding and decoding require the image resolution's width and height to be aligned with 8 bytes.
+2. The X86 version only supports mutual conversion between bgr8/rgb8/nv12 and jpeg.
+3. When decoding h264 or h265, hobot_codec needs to start parsing from the first frame of the video.
+4. For non-zero copy data transmission methods (when in_mode/out_mode parameters are set to ros), when `in_format/out_format` parameters are set to `jpeg`, the data type of the subscribed/published topic is `sensor_msgs::msg::CompressedImage`; when parameters are set to `bgr8/rgb8/nv12`, the data type of the subscribed/published topic is `sensor_msgs::msg::Image`.
 
 ### Run Option 1: Command Line
 
@@ -145,7 +146,9 @@ ros2 run mipi_cam mipi_cam --ros-args -p out_format:=nv12 -p io_method:=shared_m
 
 # Encode to JPEG
 ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p in_format:=nv12 -p out_mode:=shared_mem -p out_format:=jpeg -p sub_topic:=/hbmem_img -p dump_output:=True
-```2. Subscribe to NV12 format images published by the image publishing tool, test encoding:
+```
+
+2. Subscribe to NV12 format images published by the image publishing tool, test encoding:
 
 ```shell
 # Publish NV12 format images using the image publishing tool
@@ -193,7 +196,9 @@ ros2 run hobot_codec hobot_codec_republish --ros-args -p in_mode:=shared_mem -p 
 # Publish JPEG format images using the image publishing tool
 cp -r /opt/tros/${TROS_DISTRO}/lib/hobot_image_publisher/config/ .
 ros2 run hobot_image_publisher hobot_image_pub --ros-args -p image_source:=./config/test1.jpg -p output_image_w:=960 -p output_image_h:=544 -p image_format:=jpg -p is_compressed_img_pub:=True -p msg_pub_topic_name:=/image_jpeg
-```### Running method 2, using launch files
+```
+
+### Running method 2, using launch files
 
 ```shell
 source /opt/tros/setup.bash
@@ -289,7 +294,7 @@ X3 Specs:
 | Type  | Input Format | Output Format | Time Consumption | CPU Usage | Memory Usage | Input FPS | Output FPS |
 | ----  | ------------ | ------------  | ---------------  | --------- | ------------ | --------- | ---------- |
 | Decode | JPEG        | NV12          | 4.4 ms           | 17.0%     | 0.7%        | 30.3      | 30.3       |
-```| Decoding | H264 | NV12 | 88.3 | 9.7% | 0.7% | 24.1 | 24.1 |
+| Decoding | H264 | NV12 | 88.3 | 9.7% | 0.7% | 24.1 | 24.1 |
 | Decoding | H265 | NV12 | 87.0 | 9.6% | 0.7% | 24.1 | 24.1 |
 | Encoding | NV12 | JPEG | 4.7 | 13.0% | 0.8% | 30.3 | 30.3 |
 | Encoding | NV12 | H264 | 5.5 | 11.0% | 0.8% | 30.3 | 30.3 |
